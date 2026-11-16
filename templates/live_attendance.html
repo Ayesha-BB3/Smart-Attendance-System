@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Live Attendance{% endblock %}
+{% block page_title %}Live Camera Attendance{% endblock %}
+
+{% block content %}
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="role-banner">
+    <h2>📷 Live Attendance in Progress</h2>
+    <p>Teacher: <strong>{{ teacher_name }}</strong> | Target: <strong>{{ target_dept }} - {{ target_sem }}</strong> | Subject: <strong>{{ target_subj }}</strong></p>
+</div>
+
+<div class="card text-center p-15">
+    <h3 class="card-header" style="justify-content:center;"><i class="bi bi-camera-video-fill"></i> Camera Feed</h3>
+    <div style="background:#000; border-radius:12px; padding:10px; max-width:800px; margin:0 auto;">
+        <img id="liveVideo" src="" alt="Starting camera..." style="width:100%; max-width:760px; border-radius:8px; display:block; margin:0 auto; min-height: 300px; object-fit:cover;">
+    </div>
+    <div class="mt-20 flex-center gap-15 flex-wrap">
+        <a href="/teacher_attendance" onclick="stopCamera()" class="btn btn-navy"><i class="bi bi-arrow-left"></i> Stop & Back</a>
+    </div>
+</div>
+
+<script>
+    let lastSeenAttendanceId = 0;
+    let isInitialLoad = true;
+    let pollInterval;
+
+    const img = document.getElementById('liveVideo');
+    img.src = "/video_feed?t=" + new Date().getTime();
+    
+    function stopCamera() {
+        img.src = ""; clearInterval(pollInterval); document.getElementById('toastContainer').innerHTML = ""; 
+    }
+
+    function showToast(studentName, roll, imageName, time) {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = 'custom-toast';
+        toast.style.cssText = 'display:flex; align-items:center; gap:10px; background:var(--bg-secondary); border:1px solid var(--accent); padding:15px; border-radius:8px; margin-bottom:10px; opacity:0; transition:0.3s; transform:translateX(50px);';
+        const imageUrl = imageName ? `/student_image/${imageName}` : 'https://via.placeholder.com/60?text=No+Pic';
+        toast.innerHTML = `
+            <img src="${imageUrl}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;" alt="Student">
+            <div style="display:flex; flex-direction:column; color:white;">
+                <strong style="color:var(--accent);">✅ ${studentName}</strong>
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Roll: ${roll} | Time: ${time}</span>
+            </div>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; }, 100);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(50px)'; setTimeout(() => toast.remove(), 400); }, 3000); 
+    }
+
+    pollInterval = setInterval(() => {
+        fetch('/check_new_attendance').then(res => res.json()).then(data => {
+            if (data.status === 'success') {
+                if (isInitialLoad) { lastSeenAttendanceId = data.id; isInitialLoad = false; }
+                else if (data.id !== lastSeenAttendanceId) {
+                    lastSeenAttendanceId = data.id;
+                    showToast(data.name, data.roll, data.image, data.time);
+                }
+            } else if (data.status === 'none') { isInitialLoad = false; }
+        }).catch(err => console.log(err));
+    }, 2000);
+</script>
+{% endblock %}

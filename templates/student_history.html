@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Student History{% endblock %}
+{% block page_title %}Attendance History{% endblock %}
+{% block content %}
+<div class="card flex gap-20 flex-wrap mb-25" style="align-items:center;">
+    <img src="/student_image/{{ student_info[4] }}" alt="photo" style="width:100px; height:100px; object-fit:cover; border-radius:50%; border:3px solid var(--accent);">
+    <div>
+        <h3 style="color:var(--text-primary); margin:0 0 5px 0;">{{ student_info[0] }}</h3>
+        <p class="text-muted" style="margin:0;">Roll No: <strong>{{ student_info[1] }}</strong> | {{ student_info[2] }} | {{ student_info[3] }} Semester</p>
+    </div>
+</div>
+
+<div class="card mb-25">
+    <form method="GET" class="flex gap-15 flex-wrap" style="align-items:end;">
+        <div class="form-group" style="flex:1; margin:0; min-width:220px;">
+            <label>Select Month</label>
+            <select name="month">
+                <option value="">-- All Time --</option>
+                {% for m in all_months %}
+                <option value="{{ m.value }}" {% if filter_month == m.value %}selected{% endif %}>{{ m.name }} {{ m.value.split('-')[0] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-navy"><i class="bi bi-search"></i> View</button>
+        <a href="/download_any_student_report/{{ student_id }}?month={{ filter_month }}" class="btn btn-success"><i class="bi bi-file-earmark-excel"></i> Download Report</a>
+    </form>
+</div>
+
+{% if filter_month or filter_subject %}
+<div class="card">
+    <div class="flex-between flex-wrap gap-10 card-header">
+        <h3 class="m-0" style="color:var(--text-primary);">Records {% if filter_month %}for {{ filter_month }}{% endif %} {% if filter_subject %} — {{ filter_subject }}{% endif %}</h3>
+        <span class="badge-warning">{{ history_data|length }} Records</span>
+    </div>
+    {% if history_data %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Subject</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for h in history_data %}
+                <tr><td style="font-weight:600;">{{ h[0] }}</td><td>{{ h[1] }}</td><td>{{ h[2] }}</td><td><span class="badge-success">{{ h[3] }}</span></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center p-20">
+        <i class="bi bi-calendar-x" style="font-size:3rem; color:var(--text-secondary);"></i>
+        <p class="text-muted mt-10">No attendance records found.</p>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card text-center p-20">
+    <i class="bi bi-calendar3" style="font-size:3rem; color:var(--text-secondary);"></i>
+    <p class="text-muted mt-10">Select a month above to view attendance records.</p>
+</div>
+{% endif %}
+{% endblock %}

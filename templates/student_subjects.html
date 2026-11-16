@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Subject Details{% endblock %}
+{% block page_title %}Full Semester Subject Details{% endblock %}
+{% block content %}
+<div class="card">
+    <h3 class="card-header"><i class="bi bi-book"></i> Subject-wise Full Semester Breakdown</h3>
+    
+    {% if subject_data %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Assigned Teacher</th>
+                    <th style="text-align:center;">Total Classes</th>
+                    <th style="text-align:center;">Present</th>
+                    <th style="text-align:center;">Absent</th>
+                    <th style="text-align:center;">Leaves</th>
+                    <th style="text-align:center;">Percentage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in subject_data %}
+                <tr>
+                    <td style="font-weight:600;">{{ s.subject }}</td>
+                    <td>{{ s.teacher_name }}</td>
+                    <td class="text-center" style="font-weight:bold;">{{ s.total }}</td>
+                    <td class="text-center"><span class="badge-success">{{ s.present }}</span></td>
+                    <td class="text-center"><span class="badge-danger">{{ s.absent }}</span></td>
+                    <td class="text-center"><span class="badge-warning">{{ s.leaves }}</span></td>
+                    <td class="text-center">
+                        {% if s.percentage >= 75 %}<span class="badge-success">{{ s.percentage }}%</span>
+                        {% elif s.percentage >= 50 %}<span class="badge-warning">{{ s.percentage }}%</span>
+                        {% else %}<span class="badge-danger">{{ s.percentage }}%</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center p-20">
+        <i class="bi bi-journal-x" style="font-size:3rem; color:var(--text-secondary);"></i>
+        <p class="text-muted mt-10">No subjects assigned yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

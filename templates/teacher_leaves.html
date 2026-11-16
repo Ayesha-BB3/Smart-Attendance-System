@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Student Leaves{% endblock %}
+{% block page_title %}Student Leave Overview{% endblock %}
+{% block content %}
+<div class="card mb-25" style="border-left:5px solid var(--accent); background:rgba(92, 156, 230, 0.05);">
+    <h3 class="card-header"><i class="bi bi-calendar-x"></i> Today's Leave Students</h3>
+    {% if todays_leaves %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Student Name</th><th>Roll No</th><th>Semester</th><th>Reason</th></tr></thead>
+            <tbody>
+                {% for l in todays_leaves %}
+                <tr><td style="font-weight:600;">{{ l[0] }}</td><td>{{ l[1] }}</td><td>{{ l[2] }}</td><td class="text-muted">{{ l[3] }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="text-muted">No student is on leave today.</p>{% endif %}
+</div>
+
+<div class="card">
+    <h3 class="card-header"><i class="bi bi-clock-history"></i> Semester & Month-wise Summary</h3>
+    {% if leaves_history %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Semester</th><th>Month</th><th>Student Name</th><th>Roll No</th><th style="text-align:center;">Total Req</th><th style="text-align:center;">Approved</th><th style="text-align:center;">Rejected</th></tr></thead>
+            <tbody>
+                {% for l in leaves_history %}
+                <tr>
+                    <td><strong>{{ l[2] }}</strong></td>
+                    <td><strong>{{ l[3] }}</strong></td>
+                    <td style="font-weight:600;">{{ l[0] }}</td>
+                    <td>{{ l[1] }}</td>
+                    <td class="text-center" style="font-weight:bold;">{{ l[4] }}</td>
+                    <td class="text-center"><span class="badge-success">{{ l[5] }}</span></td>
+                    <td class="text-center"><span class="badge-danger">{{ l[6] }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="text-muted">No leave history available.</p>{% endif %}
+</div>
+{% endblock %}

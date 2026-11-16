@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Manage Sessions{% endblock %}
+{% block page_title %}Manage Semester Sessions{% endblock %}
+{% block content %}
+
+<div class="card mb-25" style="border-left:5px solid var(--accent);">
+    <h3 class="card-header"><i class="bi bi-calendar-event"></i> Activate / Update Semester</h3>
+    <p class="text-muted mb-15" style="font-size:0.9rem;">Select a semester and set its start and end dates to activate it.</p>
+    
+    <form method="POST" action="/update_semester_session" class="flex gap-15 flex-wrap p-15" style="align-items:end; background:rgba(10,22,51,0.4); border-radius:8px; border:1px solid var(--border);">
+        <div class="form-group" style="flex:1; margin:0; min-width:180px;">
+            <label>Select Semester</label>
+            <select name="semester" required>
+                <option value="">-- Choose Semester --</option>
+                {% for sem in all_semesters %}
+                    <option value="{{ sem }}">{{ sem }} Semester</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="flex:1; margin:0; min-width:160px;">
+            <label>Start Date</label>
+            <input type="date" name="start_date" required>
+        </div>
+        <div class="form-group" style="flex:1; margin:0; min-width:160px;">
+            <label>End Date</label>
+            <input type="date" name="end_date" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="height:42px;" class="nowrap"><i class="bi bi-check-circle"></i> Activate / Update</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3 class="card-header" style="color:var(--success);"><i class="bi bi-check-circle-fill"></i> Currently Active Semesters</h3>
+    
+    {% if sem_sessions %}
+    <div class="table-responsive" style="border: 1px solid var(--border); border-radius: 8px;">
+        <table class="data-table" style="margin:0;">
+            <thead>
+                <tr>
+                    <th>Semester</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Status</th>
+                    <th style="text-align:center;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ss in sem_sessions %}
+                <tr>
+                    <td><strong style="color:var(--text-primary); font-size:1.05rem;"><i class="bi bi-calendar3" style="color:var(--accent);"></i> {{ ss[0] }} Semester</strong></td>
+                    <td style="font-weight:600;">{{ ss[1] if ss[1] else 'Not Set' }}</td>
+                    <td style="font-weight:600;">{{ ss[2] if ss[2] else 'Not Set' }}</td>
+                    <td><span class="badge-success">Active</span></td>
+                    <td class="text-center">
+                        <form method="POST" action="/clear_semester_session/{{ ss[0] }}" style="margin:0;" onsubmit="return confirm('Are you sure you want to deactivate {{ ss[0] }} Semester?');">
+                            <button type="submit" class="btn btn-danger" style="padding:5px 12px; font-size:0.8rem;"><i class="bi bi-x-circle"></i> Deactivate</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center p-20" style="background: rgba(10,22,51,0.4); border-radius:8px; border:1px dashed var(--border);">
+        <i class="bi bi-calendar-x" style="font-size:3rem; color:var(--text-secondary); display:block; margin-bottom:15px;"></i>
+        <h4 style="color:var(--text-primary); margin-bottom:5px; font-weight:700;">No Active Semesters</h4>
+        <p class="text-muted">Use the form above to set dates and activate a semester.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

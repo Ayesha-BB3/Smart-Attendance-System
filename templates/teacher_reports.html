@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Download Reports{% endblock %}
+{% block page_title %}Class Reports & Analytics{% endblock %}
+{% block content %}
+
+<!-- 🔍 FILTER FORM -->
+<div class="card mb-25" style="border-left:5px solid var(--accent);">
+    <h3 class="card-header"><i class="bi bi-filter-square-fill"></i> Select Class Details</h3>
+    <p class="text-muted mb-15" style="font-size:0.9rem;">Select the class to view analytics and download the attendance report.</p>
+    
+    <form method="GET" action="/teacher_reports">
+        <div class="grid gap-15" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end;">
+            <div class="form-group" style="margin:0;">
+                <label>Department</label>
+                <select name="department" required>
+                    <option value="">-- Select --</option>
+                    {% for d in all_departments %}
+                    <option value="{{ d }}" {% if filter_dept == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label>Semester</label>
+                <select name="semester" required>
+                    <option value="">-- Select --</option>
+                    {% for s in all_semesters %}
+                    <option value="{{ s }}" {% if filter_sem == s %}selected{% endif %}>{{ s }} Semester</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label>Subject Name</label>
+                <input type="text" name="subject" placeholder="e.g. Artificial Intelligence" value="{{ filter_subj }}" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label>Month (Optional)</label>
+                <select name="month">
+                    <option value="">-- All Time --</option>
+                    {% for m in all_months %}
+                    <option value="{{ m.value }}" {% if filter_month == m.value %}selected{% endif %}>{{ m.name }} {{ m.value.split('-')[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <button type="submit" class="btn btn-primary w-100" style="height: 42px;">
+                    <i class="bi bi-bar-chart-line-fill"></i> View Analytics
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ❌ ERROR MESSAGE -->
+{% if error_msg %}
+<div class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle-fill"></i> {{ error_msg }}
+</div>
+{% endif %}
+
+<!-- 📊 ANALYTICS DASHBOARD -->
+{% if class_stats %}
+<div class="role-banner mb-25" style="background: var(--navy-light);">
+    <div class="flex-between flex-wrap gap-10">
+        <div>
+            <h2 style="margin:0;">{{ class_stats.subj }}</h2>
+            <p style="margin:5px 0 0 0; color:var(--mint);">
+                <i class="bi bi-building"></i> {{ class_stats.dept }} | 
+                <i class="bi bi-calendar3"></i> {{ class_stats.sem }} Semester | 
+                <i class="bi bi-clock"></i> {{ 'All Time' if not class_stats.month else class_stats.month }}
+            </p>
+        </div>
+        <div>
+            <a href="/download_teacher_report?department={{ class_stats.dept }}&semester={{ class_stats.sem }}&subject={{ class_stats.subj }}&month={{ class_stats.month }}" 
+               class="btn btn-success" style="padding:10px 20px; font-size:1rem;">
+                <i class="bi bi-file-earmark-excel"></i> Download Full Excel
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- 🎯 UPDATED STATS CARDS (Only Students, Classes, Percentage) -->
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
+    <div class="stat-card" style="border-left: 4px solid var(--navy);">
+        <div class="stat-icon navy"><i class="bi bi-people-fill"></i></div>
+        <div class="stat-info"><h3>{{ class_stats.students }}</h3><p>Total Students</p></div>
+    </div>
+    <div class="stat-card" style="border-left: 4px solid var(--slate);">
+        <div class="stat-icon purple"><i class="bi bi-journal-check"></i></div>
+        <div class="stat-info"><h3>{{ class_stats.total_classes }}</h3><p>Total Classes Held</p></div>
+    </div>
+    <div class="stat-card" style="border-left: 4px solid var(--mint);">
+        <div class="stat-icon" style="background:rgba(16,185,129,0.15); color:var(--success);"><i class="bi bi-graph-up-arrow"></i></div>
+        <div class="stat-info"><h3>{{ class_stats.pct }}%</h3><p>Class Average</p></div>
+    </div>
+</div>
+
+<!-- 📈 CHART SECTION -->
+<div class="card mb-25">
+    <h3 class="card-header"><i class="bi bi-pie-chart-fill"></i> Class Attendance Distribution</h3>
+    <div style="max-width: 350px; margin: 0 auto; position: relative; height: 300px;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; z-index: 10;">
+            <h2 style="margin: 0; font-size: 2rem; color: var(--text-primary); font-weight: 800;">{{ class_stats.pct }}%</h2>
+            <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">AVG ATTENDANCE</p>
+        </div>
+        <canvas id="classChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const presentData = {{ class_stats.present | default(0) }};
+        const absentData = {{ class_stats.absent | default(0) }};
+        const leaveData = {{ class_stats.leaves | default(0) }};
+        const total = presentData + absentData + leaveData;
+        
+        const chartData = (total === 0) ? [1, 1, 1] : [presentData, absentData, leaveData];
+        
+        const pP = total === 0 ? 0 : Math.round((presentData / total) * 100);
+        const pA = total === 0 ? 0 : Math.round((absentData / total) * 100);
+        const pL = total === 0 ? 0 : Math.round((leaveData / total) * 100);
+        
+        const chartLabels = (total === 0) ? ['No Data', 'No Data', 'No Data'] : [`Present (${pP}%)`, `Absent (${pA}%)`, `Leaves (${pL}%)`];
+        const chartColors = (total === 0) ? ['#cbd5e1', '#cbd5e1', '#cbd5e1'] : ['#5C9CE6', '#ef4444', '#10b981'];
+
+        const ctx = document.getElementById('classChart').getContext('2d');
+        new Chart(ctx, { 
+            type: 'doughnut', 
+            data: { 
+                labels: chartLabels, 
+                datasets: [{ data: chartData, backgroundColor: chartColors, borderWidth: 0, cutout: '75%' }] 
+            }, 
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { position: 'bottom', labels: { color: '#B0C4DE', font: { size: 12, family: 'Poppins' }, usePointStyle: true, padding: 20 } } 
+                } 
+            } 
+        });
+    });
+</script>
+{% else %}
+<!-- Empty State -->
+<div class="card text-center p-20">
+    <i class="bi bi-bar-chart-fill" style="font-size:3.5rem; color:var(--text-secondary); display:block; margin-bottom:15px; opacity:0.5;"></i>
+    <h4 style="color:var(--text-main); margin-bottom:5px;">No Class Selected</h4>
+    <p class="text-muted" style="max-width:400px; margin:0 auto;">Please select a Department, Semester, and Subject above to view attendance analytics and download reports.</p>
+</div>
+{% endif %}
+
+{% endblock %}

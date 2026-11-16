@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}HOD Overview{% endblock %}
+{% block page_title %}Dashboard Overview{% endblock %}
+{% block content %}
+<div class="role-banner">
+    <h2>Welcome, HOD — {{ dept }} 🏛️</h2>
+    <p>Department Head Dashboard — Overview & Stats</p>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
+    <div class="stat-card"><div class="stat-icon navy"><i class="bi bi-people-fill"></i></div><div class="stat-info"><h3>{{ total_students }}</h3><p>Total Students</p></div></div>
+    <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-person-workspace"></i></div><div class="stat-info"><h3>{{ total_teachers }}</h3><p>Total Teachers</p></div></div>
+</div>
+
+<div class="card mb-25">
+    <h3 class="card-header"><i class="bi bi-pie-chart-fill"></i> Department Overall Attendance</h3>
+    <div style="max-width: 350px; margin: 0 auto; position: relative; height: 300px;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; z-index: 10;">
+            <h2 style="margin: 0; font-size: 2rem; color: var(--text-primary); font-weight: 800;">{{ dept_pct }}%</h2>
+            <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">OVERALL</p>
+        </div>
+        <canvas id="hodChart"></canvas>
+    </div>
+</div>
+
+<!-- 🚨 DEFAULTER LIST (Grouped by Semester) -->
+{% if defaulters %}
+<div class="card" style="border-left:5px solid var(--danger);">
+    <div class="flex-between mb-20 flex-wrap gap-10">
+        <h3 class="m-0" style="color:var(--danger); display:flex; align-items:center; gap:10px;">
+            <i class="bi bi-exclamation-triangle-fill"></i> Monthly Defaulter List (Below 75%)
+        </h3>
+        <span class="badge-danger" style="font-size:0.85rem; padding:6px 14px;">Month: {{ current_month }}</span>
+    </div>
+    
+    <p class="text-muted mb-15" style="font-size:0.85rem;">
+        <i class="bi bi-info-circle"></i> This list is calculated based on the current month's attendance. Students will automatically be removed next month.
+    </p>
+
+    {% for sem, students in defaulters.items() %}
+    <details class="mb-15" style="border:1px solid var(--border); border-radius:10px; padding:15px; background:rgba(10, 22, 51, 0.02);" {% if loop.first %}open{% endif %}>
+        <summary style="font-weight:700; font-size:1.05rem; color:var(--text-primary); display:flex; align-items:center; gap:10px; cursor:pointer;">
+            <i class="bi bi-folder-fill" style="color:var(--danger);"></i> {{ sem }} Semester Defaulters
+            <span class="badge-danger" style="font-size:0.75rem; margin-left:auto;">{{ students|length }} Students</span>
+        </summary>
+        
+        <!-- 🔥 REMOVE ALL BUTTON (Semester Wise) 🔥 -->
+        <div class="flex-between mt-15 mb-10" style="align-items:center; background:var(--bg-main); padding:10px 15px; border-radius:8px; border:1px dashed var(--border);">
+            <span style="font-size:0.85rem; color:var(--text-secondary);">
+                <i class="bi bi-info-circle"></i> You can remove all these students at once.
+            </span>
+            <form method="POST" action="/dismiss_semester_defaulters/{{ sem }}/{{ current_month }}" style="margin:0;" onsubmit="return confirm('Are you sure you want to remove ALL {{ students|length }} defaulters from {{ sem }} semester for this month?');">
+                <button type="submit" class="btn btn-danger" style="padding:6px 14px; font-size:0.8rem;">
+                    <i class="bi bi-trash-fill"></i> Remove All
+                </button>
+            </form>
+        </div>
+        <!-- 🔥 END REMOVE ALL BUTTON 🔥 -->
+
+        <div class="table-responsive mt-15">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Roll No</th>
+                        <th>Student Name</th>
+                        <th>Percentage</th>
+                        <th style="text-align:center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in students %}
+                    <tr>
+                        <td><strong>{{ d.roll }}</strong></td>
+                        <td>{{ d.name }}</td>
+                        <td><span class="badge-danger">{{ d.pct }}%</span></td>
+                        <td class="text-center">
+                            <!-- Single remove ka option bhi mojood rahega -->
+                            <form method="POST" action="/dismiss_defaulter/{{ d.id }}/{{ current_month }}" style="margin:0;" onsubmit="return confirm('Remove {{ d.name }} from defaulter list for this month?');">
+                                <button type="submit" class="btn btn-light" style="padding:4px 10px; font-size:0.75rem; color:var(--danger); border-color:var(--danger);">
+                                    <i class="bi bi-x-circle"></i> Remove
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+    {% endfor %}
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const deptPresent = {{ dept_present | default(0) }};
+        const deptAbsent = {{ dept_absent | default(0) }};
+        const deptLeaves = {{ dept_leaves | default(0) }};
+        const total = deptPresent + deptAbsent + deptLeaves;
+        const chartData = (total === 0) ? [1, 1, 1] : [deptPresent, deptAbsent, deptLeaves];
+        const pP = total === 0 ? 0 : Math.round((deptPresent / total) * 100);
+        const pA = total === 0 ? 0 : Math.round((deptAbsent / total) * 100);
+        const pL = total === 0 ? 0 : Math.round((deptLeaves / total) * 100);
+        const chartLabels = (total === 0) ? ['No Data', 'No Data', 'No Data'] : [`Present (${pP}%)`, `Absent (${pA}%)`, `Leaves (${pL}%)`];
+        const chartColors = (total === 0) ? ['#cbd5e1', '#cbd5e1', '#cbd5e1'] : ['#5C9CE6', '#ef4444', '#10b981'];
+        const ctx = document.getElementById('hodChart').getContext('2d');
+        new Chart(ctx, { type: 'doughnut', data: { labels: chartLabels, datasets: [{ data: chartData, backgroundColor: chartColors, borderWidth: 0, cutout: '75%' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#B0C4DE', font: { size: 12, family: 'Poppins' }, usePointStyle: true, padding: 20 } } } } });
+    });
+</script>
+{% endblock %}

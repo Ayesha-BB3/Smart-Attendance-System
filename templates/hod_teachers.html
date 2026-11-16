@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}View Teachers{% endblock %}
+{% block page_title %}Manage Teachers{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="flex-between flex-wrap gap-10 card-header">
+        <h3 class="m-0" style="color:var(--text-primary);"><i class="bi bi-person-workspace"></i> Staff in {{ dept }}</h3>
+    </div>
+    {% if teachers %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>#</th><th>Employee ID</th><th>Name</th><th>Role</th><th style="text-align:center;">Action</th></tr></thead>
+            <tbody>
+                {% for t in teachers %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><span class="badge-warning">{{ t[2] }}</span></td>
+                    <td style="font-weight:600;">{{ t[1] }}</td>
+                    <td>
+                        {% if t[3] == 'hod' %}<span class="badge-success">HOD</span>
+                        {% else %}<span style="font-size:0.8rem; color:var(--text-secondary);">Teacher</span>{% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if t[3] == 'teacher' %}
+                        <form action="/delete_teacher/{{ t[0] }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete {{ t[1] }}?');">
+                            <button type="submit" class="btn btn-danger" style="padding:5px 12px; font-size:0.8rem;">
+                                <i class="bi bi-trash"></i> Remove
+                            </button>
+                        </form>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center p-20"><p class="text-muted">No staff registered yet.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

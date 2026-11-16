@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Apply for Leave{% endblock %}
+{% block page_title %}Leave Application{% endblock %}
+{% block content %}
+<div class="card mb-25" style="border-left:5px solid var(--accent); background:rgba(92, 156, 230, 0.05);">
+    <h3 class="card-header"><i class="bi bi-calendar-plus"></i> Apply for a Leave</h3>
+    <p class="text-muted mb-20" style="font-size:0.9rem;">Select the date you want to take leave. Upload a medical certificate if applicable.</p>
+    
+    <!-- Form Layout Fix -->
+    <form method="POST" enctype="multipart/form-data" class="flex gap-15 flex-wrap p-15" style="align-items:end; background: rgba(10,22,51,0.4); border-radius:8px; border:1px solid var(--border);">
+        <div class="form-group" style="flex: 1; margin:0; min-width: 140px;">
+            <label>Select Date</label>
+            <input type="date" name="leave_date" required>
+        </div>
+        <div class="form-group" style="flex: 2; margin:0; min-width: 200px;">
+            <label>Reason for Leave</label>
+            <input type="text" name="reason" placeholder="e.g. Medical Emergency" required>
+        </div>
+        <div class="form-group" style="flex: 1.5; margin:0; min-width: 180px;">
+            <label>Document (Optional)</label>
+            <input type="file" name="document" accept=".jpg, .jpeg, .png, .pdf" style="padding: 6px; font-size:0.8rem; width: 100%;">
+        </div>
+        <div class="form-group" style="margin:0; flex: 0 0 auto;">
+            <button type="submit" class="btn btn-primary" style="height:38px;"><i class="bi bi-send"></i> Apply</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3 class="card-header"><i class="bi bi-clock-history"></i> My Leave History</h3>
+    {% if my_leaves %}
+    <div class="table-responsive">
+        <table class="data-table" style="table-layout: fixed; width: 100%;">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">Leave Date</th>
+                    <th style="width: 40%;">Reason (Preview)</th>
+                    <th style="width: 15%;">Proof</th>
+                    <th style="width: 15%;">Status</th>
+                    <th style="width: 15%;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in my_leaves %}
+                <tr>
+                    <td class="nowrap"><strong>{{ l[1] }}</strong></td>
+                    <td style="font-size:0.85rem;">
+                        <div class="flex gap-5" style="align-items:center;">
+                            <span class="truncate-text" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary);">
+                                {{ l[2] }}
+                            </span>
+                            <button type="button" class="btn btn-light" style="padding:2px 6px; font-size:0.7rem;" onclick="showLeaveModal('{{ l[1] }}', this)" data-reason="{{ l[2] | e }}" data-doc="{{ l[5] if l[5] else '' }}">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                        </div>
+                    </td>
+                    <td>
+                        {% if l[5] %}
+                            <a href="/leave_document/{{ l[5] }}" target="_blank" class="btn btn-light" style="padding:2px 8px; font-size:0.75rem;">
+                                <i class="bi bi-paperclip"></i> File
+                            </a>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if l[4] == 'Approved' %}<span class="badge-success"><i class="bi bi-check-circle"></i> Approved</span>
+                        {% elif l[4] == 'Rejected' %}<span class="badge-danger"><i class="bi bi-x-circle"></i> Rejected</span>
+                        {% else %}<span class="badge-warning"><i class="bi bi-hourglass-split"></i> Pending</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if l[4] == 'Pending' %}
+                        <form method="POST" action="/delete_leave/{{ l[0] }}" onsubmit="return confirm('Are you sure you want to delete this leave?');" style="margin:0;">
+                            <button type="submit" class="btn btn-danger" style="padding:4px 10px; font-size:0.75rem;"><i class="bi bi-trash"></i> Delete</button>
+                        </form>
+                        {% else %}
+                        <span style="color:var(--text-secondary); font-size:0.8rem;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="text-muted">You haven't applied for any leaves yet.</p>{% endif %}
+</div>
+
+<!-- Modal -->
+<div id="leaveModal" class="custom-modal" style="display:none; position:fixed; inset:0; background:rgba(17,24,63,0.65); backdrop-filter:blur(4px); z-index:999; align-items:center; justify-content:center;">
+    <div class="custom-modal-content" style="background:#fff; border-radius:12px; padding:24px; max-width:440px; width:90%; position:relative;">
+        <span style="position:absolute; top:12px; right:16px; font-size:1.5rem; cursor:pointer;" onclick="closeLeaveModal()">&times;</span>
+        <h3 style="margin-bottom:15px; font-weight:800;"><i class="bi bi-info-circle" style="color:var(--accent);"></i> Leave Details</h3>
+        <p><strong>Leave Date:</strong> <br><span id="modalDate" style="color: var(--accent); font-weight: bold;"></span></p>
+        <p><strong>Reason:</strong> <br>
+            <span id="modalReason" style="white-space: pre-wrap; word-break: break-word; background: var(--bg-main); padding: 10px; border-radius: 8px; display: block; margin-top: 5px; color: var(--text-main); max-height: 150px; overflow-y: auto;"></span>
+        </p>
+        <div id="modalDocContainer" class="mt-15" style="margin-top:15px;">
+            <strong>Attachment:</strong> 
+            <a id="modalDocLink" href="#" target="_blank" class="btn btn-light mt-10" style="padding:4px 10px; font-size:0.85rem;">
+                <i class="bi bi-paperclip"></i> View Document
+            </a>
+        </div>
+        <button class="btn btn-navy w-100 mt-20" style="margin-top:20px;" onclick="closeLeaveModal()">Close</button>
+    </div>
+</div>
+
+<script>
+    function showLeaveModal(date, btn) {
+        document.getElementById('modalDate').innerText = date;
+        document.getElementById('modalReason').innerText = btn.getAttribute('data-reason');
+        let doc = btn.getAttribute('data-doc');
+        let docContainer = document.getElementById('modalDocContainer');
+        if (doc && doc !== '') {
+            docContainer.style.display = 'block';
+            document.getElementById('modalDocLink').href = '/leave_document/' + doc;
+        } else {
+            docContainer.style.display = 'none';
+        }
+        document.getElementById('leaveModal').style.display = 'flex';
+    }
+    function closeLeaveModal() {
+        document.getElementById('leaveModal').style.display = 'none';
+    }
+    window.onclick = function(event) {
+        const modal = document.getElementById('leaveModal');
+        if (event.target == modal) { closeLeaveModal(); }
+    }
+</script>
+{% endblock %}

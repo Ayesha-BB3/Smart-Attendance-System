@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Class Details{% endblock %}
+{% block page_title %}Class Details{% endblock %}
+{% block content %}
+
+<!-- CLASS HEADER -->
+<div class="card" style="background:var(--navy); color:white; margin-bottom:25px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
+        <div>
+            <h2 style="margin:0 0 5px 0; color:white;">{{ subj }}</h2>
+            <p style="margin:0; opacity:0.9; font-size:0.95rem;"><i class="bi bi-building"></i> {{ dept }} | <i class="bi bi-calendar3"></i> {{ sem }} Semester</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <a href="/teacher_portal" class="btn btn-light" style="color:var(--navy);"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+            <a href="/teacher_attendance" class="btn btn-primary"><i class="bi bi-camera-video"></i> Take Attendance</a>
+        </div>
+    </div>
+</div>
+
+<!-- CLASS STATS -->
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:25px;">
+    <div class="stat-card"><div class="stat-icon navy"><i class="bi bi-journal-bookmark-fill"></i></div><div class="stat-info"><h3>{{ total_lectures }}</h3><p>Total Lectures</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:var(--success-bg); color:var(--success);"><i class="bi bi-check-circle"></i></div><div class="stat-info"><h3>{{ total_present }}</h3><p>Total Present</p></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:var(--danger-bg); color:var(--danger);"><i class="bi bi-x-circle"></i></div><div class="stat-info"><h3>{{ total_absent }}</h3><p>Total Absent</p></div></div>
+    <div class="stat-card"><div class="stat-icon purple"><i class="bi bi-envelope-paper-fill"></i></div><div class="stat-info"><h3>{{ total_leaves }}</h3><p>Total Leaves</p></div></div>
+</div>
+
+<div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px;">
+    
+    <!-- STUDENTS LIST -->
+    <div class="card">
+        <h3 style="color:var(--navy); border-bottom:2px solid var(--border); padding-bottom:10px; margin-bottom:20px;">
+            <i class="bi bi-person-lines-fill"></i> Student Breakdown ({{ students|length }})
+        </h3>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Roll No</th>
+                        <th>Name</th>
+                        <th style="text-align:center;">P</th>
+                        <th style="text-align:center;">A</th>
+                        <th style="text-align:center;">L</th>
+                        <th style="text-align:center;">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr>
+                        <td style="font-weight:600; color:var(--purple); white-space:nowrap;">{{ s.roll }}</td>
+                        <td style="font-weight:600;">{{ s.name }}</td>
+                        <td style="text-align:center;"><span class="badge-success">{{ s.present }}</span></td>
+                        <td style="text-align:center;"><span class="badge-danger">{{ s.absent }}</span></td>
+                        <td style="text-align:center;"><span class="badge-warning">{{ s.leaves }}</span></td>
+                        <td style="text-align:center;">
+                            {% if s.pct >= 75 %}<strong style="color:var(--success);">{{ s.pct }}%</strong>
+                            {% elif s.pct >= 50 %}<strong style="color:#b45309;">{{ s.pct }}%</strong>
+                            {% else %}<strong style="color:var(--danger);">{{ s.pct }}%</strong>{% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" style="text-align:center;">No students found in this class.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- RECENT SESSIONS -->
+    <div class="card">
+        <h3 style="color:var(--navy); border-bottom:2px solid var(--border); padding-bottom:10px; margin-bottom:20px;">
+            <i class="bi bi-clock-history"></i> Recent Lectures
+        </h3>
+        {% if sessions %}
+            {% for rs in sessions %}
+            <div style="padding:12px; background:var(--bg-main); border-radius:8px; margin-bottom:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-weight:700; color:var(--navy);"><i class="bi bi-calendar-check" style="color:var(--purple);"></i> {{ rs[0] }}</div>
+                <div style="font-size:0.8rem; color:var(--text-muted); background:white; padding:3px 8px; border-radius:20px; border:1px solid var(--border);">{{ rs[1] }}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:var(--text-muted); font-size:0.9rem;">No lectures taken yet for this subject.</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+@media (max-width: 900px) {
+    div[style*="grid-template-columns: 2fr 1fr;"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+{% endblock %}

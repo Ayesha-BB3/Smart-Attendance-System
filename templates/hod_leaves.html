@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Leave Approvals{% endblock %}
+{% block page_title %}Leave Management (HOD){% endblock %}
+{% block content %}
+<div class="card mb-25" style="border-left:5px solid var(--accent);">
+    <h3 class="card-header"><i class="bi bi-inbox-fill"></i> Pending Leave Requests</h3>
+    {% if pending_leaves %}
+    <div class="table-responsive">
+        <!-- Widths Adjusted & Ellipsis Added -->
+        <table class="data-table" style="table-layout: fixed; width: 100%;">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">Student</th>
+                    <th style="width: 12%;">Roll No</th>
+                    <th style="width: 12%;">Sem</th>
+                    <th style="width: 15%;">Leave Date</th>
+                    <th style="width: 23%;">Reason (Preview)</th>
+                    <th style="width: 8%;">Proof</th>
+                    <th style="width: 15%; text-align:center;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in pending_leaves %}
+                <tr>
+                    <!-- Applied overflow protection to text columns -->
+                    <td style="font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ l[1] }}</td>
+                    <td><span class="badge-warning">{{ l[2] }}</span></td>
+                    <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ l[3] }}</td>
+                    <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>{{ l[4] }}</strong></td>
+                    
+                    <td style="font-size:0.85rem;">
+                        <div class="flex gap-5" style="align-items:center;">
+                            <span class="truncate-text" style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary);">
+                                {{ l[5] }}
+                            </span>
+                            <button type="button" class="btn btn-light" style="padding:2px 6px; font-size:0.7rem;" onclick="showLeaveModal('{{ l[1] }}', '{{ l[4] }}', this)" data-reason="{{ l[5] | e }}" data-doc="{{ l[7] if l[7] else '' }}">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                        </div>
+                    </td>
+
+                    <td>
+                        {% if l[7] %}
+                            <a href="/leave_document/{{ l[7] }}" target="_blank" class="btn btn-light" style="padding:2px 8px; font-size:0.75rem;">
+                                <i class="bi bi-paperclip"></i>
+                            </a>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="flex gap-5" style="justify-content: center;">
+                            <form method="POST" action="/update_leave_status/{{ l[0] }}/Approved" style="margin:0;">
+                                <button type="submit" class="btn btn-success" style="padding:4px 8px; font-size:0.85rem;" title="Approve"><i class="bi bi-check-lg"></i></button>
+                            </form>
+                            <form method="POST" action="/update_leave_status/{{ l[0] }}/Rejected" style="margin:0;">
+                                <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.85rem;" title="Reject"><i class="bi bi-x-lg"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="text-muted">No pending leave requests.</p>{% endif %}
+</div>
+
+<div class="card">
+    <h3 class="card-header"><i class="bi bi-calendar-month"></i> Semester & Month-wise Summary</h3>
+    {% if leave_summary %}
+        {% for sem in all_semesters %}
+            {% set ns = namespace(sem_leaves=[]) %}
+            {% for s in leave_summary %}
+                {% if s[2] == sem %}
+                    {% set ns.sem_leaves = ns.sem_leaves + [s] %}
+                {% endif %}
+            {% endfor %}
+
+            {% if ns.sem_leaves %}
+            <details class="mb-15" style="border:1px solid var(--border); border-radius:10px; padding:15px; background:rgba(10, 22, 51, 0.4);">
+                <summary style="font-weight:700; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <i class="bi bi-folder-fill" style="color:var(--accent);"></i> {{ sem }} Semester Leaves
+                    <span class="badge-warning" style="font-size:0.8rem;">{{ ns.sem_leaves|length }} Records</span>
+                </summary>
+                <div class="table-responsive mt-15" style="background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <table class="data-table" style="font-size:0.9rem;">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Student Name</th>
+                                <th>Roll No</th>
+                                <th style="text-align:center;">Total Req</th>
+                                <th style="text-align:center;">Approved</th>
+                                <th style="text-align:center;">Rejected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in ns.sem_leaves %}
+                            <tr>
+                                <td><strong style="color:var(--accent);">{{ s[3] }}</strong></td>
+                                <td style="font-weight:600;">{{ s[0] }}</td>
+                                <td>{{ s[1] }}</td>
+                                <td style="text-align:center; font-weight:bold;">{{ s[4] }}</td>
+                                <td style="text-align:center;"><span class="badge-success">{{ s[5] }}</span></td>
+                                <td style="text-align:center;"><span class="badge-danger">{{ s[6] }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% endif %}
+        {% endfor %}
+    {% else %}<p class="text-muted">No leave requests have been received yet.</p>{% endif %}
+</div>
+
+<!-- Modal -->
+<div id="leaveModal" class="custom-modal" style="display:none; position:fixed; inset:0; background:rgba(17,24,63,0.65); backdrop-filter:blur(4px); z-index:999; align-items:center; justify-content:center;">
+    <div class="custom-modal-content" style="background:#fff; border-radius:12px; padding:24px; max-width:440px; width:90%; position:relative;">
+        <span style="position:absolute; top:12px; right:16px; font-size:1.5rem; cursor:pointer;" onclick="closeLeaveModal()">&times;</span>
+        <h3 style="margin-bottom:15px; font-weight:800;"><i class="bi bi-person-badge" style="color:var(--accent);"></i> Leave Request Details</h3>
+        <p><strong>Student Name:</strong> <br><span id="modalStudent" style="color: var(--text-main); font-weight: bold;"></span></p>
+        <p><strong>Leave Date:</strong> <br><span id="modalDate" style="color: var(--accent); font-weight: bold;"></span></p>
+        <p><strong>Reason:</strong> <br>
+            <span id="modalReason" style="white-space: pre-wrap; word-break: break-word; background: var(--bg-main); padding: 10px; border-radius: 8px; display: block; margin-top: 5px; color: var(--text-main); max-height: 150px; overflow-y: auto;"></span>
+        </p>
+        <div id="modalDocContainer" class="mt-15" style="margin-top:15px;">
+            <strong>Attachment:</strong> 
+            <a id="modalDocLink" href="#" target="_blank" class="btn btn-light mt-10" style="padding:4px 10px; font-size:0.85rem;">
+                <i class="bi bi-paperclip"></i> View Document
+            </a>
+        </div>
+        <button class="btn btn-navy w-100 mt-20" style="margin-top:20px;" onclick="closeLeaveModal()">Close</button>
+    </div>
+</div>
+
+<script>
+    function showLeaveModal(studentName, date, btn) {
+        document.getElementById('modalStudent').innerText = studentName;
+        document.getElementById('modalDate').innerText = date;
+        document.getElementById('modalReason').innerText = btn.getAttribute('data-reason');
+        let doc = btn.getAttribute('data-doc');
+        let docContainer = document.getElementById('modalDocContainer');
+        if (doc && doc !== '') {
+            docContainer.style.display = 'block';
+            document.getElementById('modalDocLink').href = '/leave_document/' + doc;
+        } else {
+            docContainer.style.display = 'none';
+        }
+        document.getElementById('leaveModal').style.display = 'flex';
+    }
+    function closeLeaveModal() {
+        document.getElementById('leaveModal').style.display = 'none';
+    }
+    window.onclick = function(event) {
+        const modal = document.getElementById('leaveModal');
+        if (event.target == modal) { closeLeaveModal(); }
+    }
+</script>
+{% endblock %}

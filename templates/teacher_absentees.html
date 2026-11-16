@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Absent & Leave Students{% endblock %}
+{% block page_title %}Daily Attendance Tracker{% endblock %}
+{% block content %}
+
+<div class="card mb-25" style="border-left:5px solid var(--primary);">
+    <h3 class="card-header"><i class="bi bi-calendar-x"></i> Filter by Date</h3>
+    <form method="GET" class="flex gap-15 flex-wrap" style="align-items:end;">
+        <div class="form-group" style="flex:1; margin:0; max-width:300px;">
+            <label>Select Date</label>
+            <input type="date" name="date" value="{{ filter_date }}" required>
+        </div>
+        <button type="submit" class="btn btn-navy" style="height:42px;"><i class="bi bi-search"></i> View Record</button>
+    </form>
+</div>
+
+<div class="card p-0 mb-25" style="border-left:5px solid var(--danger);">
+    <div class="flex-between p-20" style="border-bottom: 2px solid var(--border);">
+        <h3 class="m-0" style="color:var(--text-main); display:flex; align-items:center; gap:10px; font-size:1.2rem;">
+            <i class="bi bi-person-x-fill" style="color:var(--danger); font-size:1.4rem;"></i> Absent Students
+        </h3>
+        <span class="badge-warning" style="font-size:0.85rem; padding:6px 14px;">{{ absentees|length }} Students</span>
+    </div>
+    
+    <div class="p-20">
+        {% if absentees %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Department</th>
+                        <th>Semester</th>
+                        <th>Subject</th>
+                        <th>Roll No</th>
+                        <th>Student Name</th>
+                        <th style="text-align:center;">Action</th> <!-- Naya Column -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in absentees %}
+                    <tr>
+                        <td style="font-weight:600;">{{ a.dept }}</td>
+                        <td>{{ a.sem }}</td>
+                        <td><span class="badge-warning">{{ a.subj }}</span></td>
+                        <td><strong style="color:var(--primary);">{{ a.roll }}</strong></td>
+                        <td style="font-weight:600;">{{ a.name }}</td>
+                        <td style="text-align:center;">
+                            <!-- NAYA BUTTON: Mark Present Manually -->
+                            <form method="POST" action="/mark_present_manual" style="margin:0;">
+                                <input type="hidden" name="student_id" value="{{ a.id }}">
+                                <input type="hidden" name="dept" value="{{ a.dept }}">
+                                <input type="hidden" name="sem" value="{{ a.sem }}">
+                                <input type="hidden" name="subj" value="{{ a.subj }}">
+                                <input type="hidden" name="date" value="{{ filter_date }}">
+                                <button type="submit" class="btn btn-success" style="padding:4px 10px; font-size:0.75rem;" onclick="return confirm('Mark {{ a.name }} as Present?');">
+                                    <i class="bi bi-check-circle"></i> Mark Present
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center p-20 bg-body-box">
+            <div class="flex-center" style="width:70px; height:70px; background:rgba(16, 185, 129, 0.1); border-radius:50%; margin:0 auto 15px auto;">
+                <i class="bi bi-emoji-smile-fill" style="font-size:2.5rem; color:var(--success);"></i>
+            </div>
+            <h4 style="color:var(--text-main); margin-bottom:5px; font-weight:700;">No Absentees!</h4>
+            <p class="text-muted" style="margin:0;">All students are either present or on approved leave.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card p-0" style="border-left:5px solid var(--success);">
+    <div class="flex-between p-20" style="border-bottom: 2px solid var(--border);">
+        <h3 class="m-0" style="color:var(--text-main); display:flex; align-items:center; gap:10px; font-size:1.2rem;">
+            <i class="bi bi-envelope-check-fill" style="color:var(--success); font-size:1.4rem;"></i> Students on Approved Leave
+        </h3>
+        <span class="badge-warning" style="font-size:0.85rem; padding:6px 14px;">{{ on_leaves|length }} Students</span>
+    </div>
+    
+    <div class="p-20">
+        {% if on_leaves %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Department</th>
+                        <th>Semester</th>
+                        <th>Subject</th>
+                        <th>Roll No</th>
+                        <th>Student Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in on_leaves %}
+                    <tr>
+                        <td style="font-weight:600;">{{ l.dept }}</td>
+                        <td>{{ l.sem }}</td>
+                        <td><span class="badge-warning">{{ l.subj }}</span></td>
+                        <td><strong style="color:var(--primary);">{{ l.roll }}</strong></td>
+                        <td style="font-weight:600;">{{ l.name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center p-20 bg-body-box">
+            <p class="text-muted" style="margin:0; font-weight:500;"><i class="bi bi-info-circle"></i> No students on leave for this date.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Department Report{% endblock %}
+{% block page_title %}Department Monthly Report{% endblock %}
+{% block content %}
+<div class="card mb-25" style="border-left:5px solid var(--accent);">
+    <h3 class="card-header"><i class="bi bi-building"></i> {{ hod_dept }} Department Report</h3>
+    <form method="GET" action="/hod_report">
+        <div class="flex gap-15 flex-wrap" style="align-items:end;">
+            <div class="form-group" style="flex:1; margin:0; min-width:200px;">
+                <label>Select Semester</label>
+                <select name="semester" required>
+                    <option value="">-- Choose Semester --</option>
+                    {% for sem in all_semesters %}<option value="{{ sem }}" {% if filter_sem == sem %}selected{% endif %}>{{ sem }} Semester</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="flex:1; margin:0; min-width:200px;">
+                <label>Select Month</label>
+                <select name="month" required>
+                    <option value="">-- Choose Month --</option>
+                    {% for m in all_months %}<option value="{{ m.value }}" {% if filter_month == m.value %}selected{% endif %}>{{ m.name }} {{ m.value.split('-')[0] }}</option>{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="height: 42px;"><i class="bi bi-search"></i> Generate Report</button>
+        </div>
+    </form>
+</div>
+
+{% if filter_sem and filter_month %}
+<div class="card">
+    <div class="flex-between mb-20 flex-wrap gap-10" style="border-bottom:2px solid var(--border); padding-bottom:15px;">
+        <h3 class="m-0" style="color:var(--text-primary);"><i class="bi bi-calendar-check"></i> {{ filter_sem }} Semester — {{ filter_month }}</h3>
+        <div class="flex gap-10 flex-wrap" style="align-items:center;">
+            <span class="badge-warning" style="padding:5px 15px;">{{ report_data|length }} Students</span>
+            <a href="/download_hod_report?semester={{ filter_sem }}&month={{ filter_month }}" class="btn btn-navy" style="font-size:0.9rem;">
+                <i class="bi bi-file-earmark-excel"></i> Download Full Excel
+            </a>
+        </div>
+    </div>
+
+    {% if report_data and subjects_list %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Roll No</th>
+                    <th>Name</th>
+                    {% for subj in subjects_list %}
+                        <th style="text-align:center; min-width:100px;">{{ subj }}</th>
+                    {% endfor %}
+                    <th style="text-align:center; min-width:100px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in report_data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><span class="badge-warning">{{ row.roll }}</span></td>
+                    <td style="font-weight:600;" class="nowrap">{{ row.name }}</td>
+                    {% for subj in subjects_list %}
+                        {% set s = row.subjects[subj] %}
+                        <td class="text-center" style="font-size:0.85rem;">
+                            <span style="font-weight:700; color:var(--text-primary);">{{ s.present }}/{{ s.total }}</span>
+                            <br>
+                            {% if s.percentage >= 75 %}<span style="color:var(--success); font-weight:700;">{{ s.percentage }}%</span>
+                            {% elif s.percentage >= 50 %}<span style="color:var(--warning); font-weight:700;">{{ s.percentage }}%</span>
+                            {% else %}<span style="color:var(--danger); font-weight:700;">{{ s.percentage }}%</span>{% endif %}
+                        </td>
+                    {% endfor %}
+                    <td class="text-center">
+                        <a href="/student_history/{{ row.id }}?month={{ filter_month }}" class="btn btn-navy" style="padding:5px 12px; font-size:0.8rem;">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-muted mt-10" style="font-size:0.85rem;"><i class="bi bi-info-circle"></i> Each cell shows <strong>Present / Total</strong> classes.</p>
+    {% else %}
+    <div class="text-center p-20">
+        <i class="bi bi-journal-x" style="font-size:3rem; color:var(--text-secondary);"></i>
+        <p class="text-muted mt-10">No data found.</p>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card text-center p-20">
+    <i class="bi bi-arrow-up-circle" style="font-size:3.5rem; color:var(--text-secondary); display:block; margin-bottom:15px;"></i>
+    <p class="text-muted" style="font-size:1.1rem; max-width:400px; margin:0 auto;">Please select a Semester and Month above to generate the report.</p>
+</div>
+{% endif %}
+{% endblock %}

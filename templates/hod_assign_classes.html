@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Assign Classes{% endblock %}
+{% block page_title %}Assign Classes to Teachers{% endblock %}
+{% block content %}
+
+<div class="card mb-25" style="border-left:5px solid var(--accent);">
+    <h3 class="card-header"><i class="bi bi-person-plus-fill"></i> Assign New Class ({{ hod_dept }})</h3>
+    
+    <form method="POST" class="grid gap-15 p-15" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); background: rgba(10, 22, 51, 0.4); border-radius: 8px; border: 1px solid var(--border);">
+        <div class="form-group p-0 mb-0">
+            <label>Select Teacher</label>
+            <!-- NAYA: id="teacherSelect" add kiya hai -->
+            <select name="teacher_id" id="teacherSelect" required>
+                <option value="">-- Choose Teacher --</option>
+                {% for t in all_teachers %}
+                <option value="{{ t[0] }}">{{ t[1] }} ({{ t[2] }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group p-0 mb-0">
+            <label>Semester (Active Only)</label>
+            <select name="semester" required>
+                <option value="">-- Select Sem --</option>
+                {% for s in active_semesters %}<option value="{{ s }}">{{ s }} Semester</option>{% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group p-0 mb-0">
+            <label>Subject Name</label>
+            <input type="text" name="subject" placeholder="e.g. AI, OS" required>
+        </div>
+        
+        <div class="flex" style="align-items:end;">
+            <button type="submit" class="btn btn-primary w-100" style="height:42px;"><i class="bi bi-check-circle"></i> Assign</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3 class="card-header"><i class="bi bi-grid-3x3-gap-fill"></i> Current Assignments ({{ hod_dept }})</h3>
+    
+    {% if sem_counts %}
+    <div class="hod-card-grid">
+        {% for sem in sem_counts %}
+        <a href="/hod_semester_details/{{ sem[0] }}" class="hod-card">
+            <div class="hod-icon"><i class="bi bi-folder-fill"></i></div>
+            <h4 style="color: var(--text-primary); margin: 0 0 5px 0; font-size: 1.3rem; font-weight: 800;">{{ sem[0] }} Semester</h4>
+            <p class="text-muted" style="margin: 0;">{{ sem[1] }} Classes Assigned</p>
+            <div class="mt-15" style="font-size: 0.85rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 5px;">
+                View Details <i class="bi bi-arrow-right"></i>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center p-20" style="background: rgba(10, 22, 51, 0.4); border-radius:8px; border:1px dashed var(--border);">
+        <i class="bi bi-inbox" style="font-size:3rem; color:var(--text-secondary);"></i>
+        <p class="text-muted mt-10">No active classes assigned yet for your department.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 🛑 SELECT2 SEARCHABLE DROPDOWN SCRIPTS 🛑 -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        // Searchable dropdown initialize karein
+        $('#teacherSelect').select2({
+            placeholder: "-- Search & Choose Teacher --",
+            allowClear: true,
+            width: '100%'
+        });
+    });
+</script>
+
+{% endblock %}

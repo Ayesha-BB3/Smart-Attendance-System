@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Take Attendance{% endblock %}
+{% block page_title %}Take Live Attendance{% endblock %}
+{% block content %}
+<div class="card" style="border-top:4px solid var(--navy); max-width:650px; margin:0 auto; box-shadow: var(--shadow-md);">
+    <div class="text-center mb-25">
+        <div class="flex-center" style="width:60px; height:60px; background:rgba(92,156,230,0.1); border-radius:50%; margin:0 auto 15px auto;">
+            <i class="bi bi-camera-video-fill" style="font-size:1.8rem; color:var(--navy);"></i>
+        </div>
+        <h3 style="color:var(--text-main); margin:0 0 5px 0;">Start Camera</h3>
+        <p class="text-muted" style="font-size:0.85rem;">Select the target class and subject to start taking live attendance.</p>
+    </div>
+
+    <form method="GET" action="/start_attendance" class="flex-col gap-15">
+        
+        <!-- Department & Semester (Side by Side) -->
+        <div class="grid gap-15" style="grid-template-columns: 1fr 1fr;">
+            <div class="form-group" style="margin:0;">
+                <label><i class="bi bi-building" style="color:var(--slate);"></i> Department</label>
+                <select name="department" required>
+                    <option value="">-- Select --</option>
+                    {% for d in all_departments %}
+                    <option value="{{ d }}" {% if pre_dept == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group" style="margin:0;">
+                <label><i class="bi bi-calendar3" style="color:var(--slate);"></i> Semester</label>
+                <select name="semester" required>
+                    <option value="">-- Select --</option>
+                    {% for s in all_semesters %}
+                    <option value="{{ s }}" {% if pre_sem == s %}selected{% endif %}>{{ s }} Semester</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <!-- Subject -->
+        <div class="form-group" style="margin:0;">
+            <label><i class="bi bi-book" style="color:var(--slate);"></i> Subject Name</label>
+            <input type="text" name="subject" placeholder="e.g. Artificial Intelligence, OS" value="{{ pre_subj }}" required>
+        </div>
+        
+        <!-- Start Button -->
+        <button type="submit" class="btn btn-primary mt-15" style="padding:12px; font-size:1rem; border-radius: 8px;">
+            <i class="bi bi-camera-video-fill" style="font-size:1.1rem;"></i> Start Camera
+        </button>
+    </form>
+</div>
+{% endblock %}

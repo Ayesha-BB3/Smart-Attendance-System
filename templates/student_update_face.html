@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Update Face{% endblock %}
+{% block page_title %}Update Face Data{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px; margin:0 auto; text-align:center;">
+    <h3 class="card-header" style="justify-content:center;"><i class="bi bi-camera"></i> Register New Face</h3>
+    <p class="text-muted mb-20">Your old face data has been reset or you requested an update. Please capture a clear photo of your face.</p>
+    
+    <div style="background:#000; border-radius:12px; padding:10px; margin-bottom:15px;">
+        <video id="video" autoplay playsinline style="width:100%; border-radius:8px; background:#000;"></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <img id="preview" style="width:100%; border-radius:8px; display:none;">
+    </div>
+    
+    <form method="POST" action="/update_face" id="updateForm">
+        <input type="hidden" name="image_data" id="imageData">
+        <button type="button" id="captureBtn" class="btn btn-primary"><i class="bi bi-camera"></i> Capture</button>
+        <button type="button" id="retakeBtn" class="btn btn-light" style="display:none;"><i class="bi bi-arrow-clockwise"></i> Retake</button>
+        <button type="submit" id="submitBtn" class="btn btn-success w-100 mt-15" style="display:none;"><i class="bi bi-check-circle"></i> Save Face Data</button>
+    </form>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const preview = document.getElementById('preview');
+    const imageData = document.getElementById('imageData');
+    const captureBtn = document.getElementById('captureBtn');
+    const retakeBtn = document.getElementById('retakeBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    let stream = null;
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } });
+            video.srcObject = stream;
+        } catch (err) { alert("Camera not found!"); }
+    }
+    startCamera();
+
+    captureBtn.addEventListener('click', () => {
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        imageData.value = canvas.toDataURL('image/jpeg', 0.9);
+        preview.src = imageData.value;
+        
+        preview.style.display = 'block';
+        video.style.display = 'none';
+        captureBtn.style.display = 'none';
+        submitBtn.style.display = 'inline-block';
+        retakeBtn.style.display = 'inline-block';
+    });
+
+    retakeBtn.addEventListener('click', () => {
+        imageData.value = '';
+        preview.style.display = 'none';
+        video.style.display = 'block';
+        captureBtn.style.display = 'inline-block';
+        submitBtn.style.display = 'none';
+        retakeBtn.style.display = 'none';
+    });
+</script>
+{% endblock %}

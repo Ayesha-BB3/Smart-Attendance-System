@@ -1408,6 +1408,7 @@ def start_attendance():
             flash(f"Error: {semester} Semester is currently inactive.", "danger")
             return redirect(url_for('teacher_attendance'))
             
+        # Check: Kya ye teacher is class ko parhata hai?
         c.execute("""SELECT id FROM teacher_assignments 
                      WHERE teacher_id=? AND department=? AND semester=? AND LOWER(subject)=LOWER(?) AND session_name=?""", 
                   (session['user_id'], target_dept, semester, subject, active_session))
@@ -1416,15 +1417,14 @@ def start_attendance():
             return redirect(url_for('teacher_attendance'))
 
         today = date.today().strftime("%Y-%m-%d")
-        c.execute("""SELECT id FROM class_sessions 
-                     WHERE department=? AND semester=? AND LOWER(subject)=LOWER(?) AND session_name=? AND date=?""", 
-                  (target_dept, semester, subject, active_session, today))
-        if c.fetchone():
-            flash(f"Action Denied: Attendance for {subject} has already been taken today.", "warning")
-            return redirect(url_for('teacher_attendance'))
+        
+        # 🛑 FIX: Yahan se "Action Denied" wala check hata diya gaya hai.
+        # Ab teacher din mein jitni dafa chahe camera on kar sakta hai.
 
         session['target_dept'], session['target_sem'], session['target_subj'], session['active_session'] = target_dept, semester, subject, active_session
         
+        # Agar aaj is class ka session pehle se nahi bana, to naya bana dega. 
+        # Agar pehle se bana hai, to kuch nahi karega (INSERT OR IGNORE).
         c.execute("INSERT OR IGNORE INTO class_sessions (teacher_id, department, semester, subject, session_name, date) VALUES (?,?,?,?,?,?)", (session['user_id'], target_dept, semester, subject, active_session, today))
         conn.commit()
         
@@ -1434,7 +1434,6 @@ def start_attendance():
         conn.close()
         
     return render_template("live_attendance.html", teacher_name=t_name, target_dept=target_dept, target_sem=semester, target_subj=subject)
-
 @app.route("/video_feed")
 def video_feed():
     if session.get('role') not in ['teacher', 'coordinator']:

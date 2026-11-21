@@ -7,9 +7,9 @@
     <p class="text-muted mb-20">Your old face data has been reset or you requested an update. Please capture a clear photo of your face.</p>
     
     <div style="background:#000; border-radius:12px; padding:10px; margin-bottom:15px;">
-        <video id="video" autoplay playsinline style="width:100%; border-radius:8px; background:#000;"></video>
+        <video id="video" autoplay playsinline style="width:100%; border-radius:8px; background:#000; transform: scaleX(-1);"></video>
         <canvas id="canvas" style="display:none;"></canvas>
-        <img id="preview" style="width:100%; border-radius:8px; display:none;">
+        <img id="preview" style="width:100%; border-radius:8px; display:none; transform: scaleX(-1);">
     </div>
     
     <form method="POST" action="/update_face" id="updateForm">
@@ -42,7 +42,13 @@
         const ctx = canvas.getContext('2d');
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
+        
+        // Canvas par drawing (mirror effect ke sath)
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
         imageData.value = canvas.toDataURL('image/jpeg', 0.9);
         preview.src = imageData.value;
         

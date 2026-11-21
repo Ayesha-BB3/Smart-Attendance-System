@@ -27,7 +27,7 @@ def parse_args():
     p.add_argument('--steps', type=int, default=500, help='Steps per epoch')
     p.add_argument('--batch', type=int, default=32, help='Triplets per batch')
     p.add_argument('--lr', type=float, default=1e-3)
-    p.add_argument('--margin', type=float, default=0.3)
+    p.add_argument('--margin', type=float, default=0.8)
     p.add_argument('--out', default='models/face_embedder.h5')
     p.add_argument('--quick', action='store_true', help='Use 100 people only (fast test)')
     return p.parse_args()

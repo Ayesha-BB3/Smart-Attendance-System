@@ -5,8 +5,8 @@ import numpy as np
 import uuid
 import base64
 import time
-import json                      # NAYA: Embeddings save karne ke liye
-import tensorflow as tf          # NAYA: Neural Network ke liye
+import json
+import tensorflow as tf
 from io import BytesIO
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, session, send_from_directory
@@ -50,7 +50,6 @@ MODEL_PATH = os.path.join(app.root_path, 'static', 'res10_300x300_ssd_iter_14000
 face_net = cv2.dnn.readNetFromCaffe(PROTOTXT_PATH, MODEL_PATH)
 
 def detect_faces_dnn(image):
-    """Deep Learning model se kisi bhi angle ka face detect karta hai."""
     (h, w) = image.shape[:2]
     blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
     face_net.setInput(blob)
@@ -59,12 +58,11 @@ def detect_faces_dnn(image):
     faces = []
     for i in range(0, detections.shape[2]):
         confidence = detections[0, 0, i, 2]
-        if confidence > 0.5:  # 50% se zyada confidence ho
+        if confidence > 0.5:
             box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
             (startX, startY, endX, endY) = box.astype("int")
             startX, startY = max(0, startX), max(0, startY)
             endX, endY = min(w - 1, endX), min(h - 1, endY)
-            
             fw, fh = endX - startX, endY - startY
             if fw > 0 and fh > 0:
                 faces.append((startX, startY, fw, fh))
@@ -76,6 +74,8 @@ ALL_DEPARTMENTS = ["Computer Science", "English", "Urdu", "Physics", "Economics"
 
 # ================= AI MODEL LOADER =================
 _face_model = None
+IMG_SIZE = 160 # NAYA MODEL 160x160 PAR TRAIN HUA HAI
+_last_unknown_time = 0
 
 def get_face_model():
     global _face_model
@@ -84,11 +84,12 @@ def get_face_model():
     return _face_model
 
 def extract_embedding(img_bgr):
-    """Photo ko 100x100 me resize kar ke AI model se 128 numbers ka vector nikalta hai"""
     try:
         model = get_face_model()
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (100, 100))
+        img_resized = cv2.resize(img_rgb, (IMG_SIZE, IMG_SIZE))
+        
+        # Training ke mutabiq (bina YUV ke)
         img_array = img_resized.astype(np.float32) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
         embedding = model.predict(img_array, verbose=0)[0]
@@ -98,7 +99,6 @@ def extract_embedding(img_bgr):
         return None
 
 def get_cosine_distance(e1, e2):
-    """Do vectors ke darmiyan distance nikalta hai (0.80 se kam = Same Person)"""
     e1, e2 = np.array(e1), np.array(e2)
     return 1.0 - np.dot(e1, e2)
 # ==================================================
@@ -175,7 +175,6 @@ def init_db():
         c.execute("""CREATE TABLE IF NOT EXISTS dismissed_defaulters (
             id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER, month TEXT)""")
 
-        # Safe ALTER TABLE checks
         try: c.execute("ALTER TABLE semester_sessions ADD COLUMN start_date TEXT")
         except sqlite3.OperationalError: pass
         try: c.execute("ALTER TABLE semester_sessions ADD COLUMN end_date TEXT")
@@ -184,10 +183,8 @@ def init_db():
         except sqlite3.OperationalError: pass
         try: c.execute("ALTER TABLE users ADD COLUMN is_coordinator INTEGER DEFAULT 0")
         except sqlite3.OperationalError: pass
-            
         try: c.execute("ALTER TABLE users ADD COLUMN face_embeddings TEXT")
         except sqlite3.OperationalError: pass
-            
         try: c.execute("ALTER TABLE leaves ADD COLUMN document_path TEXT")
         except sqlite3.OperationalError: pass
             
@@ -207,7 +204,6 @@ def init_db():
     finally:
         conn.close()
 
-# ---------------- CONTEXT PROCESSOR ----------------
 @app.context_processor
 def inject_globals():
     data = {}
@@ -218,8 +214,7 @@ def inject_globals():
             c.execute("SELECT department FROM users WHERE id=?", (session['user_id'],))
             row = c.fetchone()
             if row:
-                c.execute("""SELECT COUNT(*) FROM users 
-                             WHERE role='teacher' AND department=? AND approval_status='pending'""", (row[0],))
+                c.execute("""SELECT COUNT(*) FROM users WHERE role='teacher' AND department=? AND approval_status='pending'""", (row[0],))
                 data['pending_teacher_count'] = c.fetchone()[0]
             conn.close()
         except Exception:
@@ -423,7 +418,9 @@ def register():
         role = request.form.get("role")
         department = request.form.get("department")
         semester = request.form.get("semester")
-        image_data = request.form.get("image_data")  # Sirf 1 photo
+        
+        # 1 SINGLE PHOTO ACCEPT KAR RAHE HAIN
+        image_data = request.form.get("image_data") 
         admin_code = request.form.get("admin_code", "").strip()
 
         conn_cfg = get_db()
@@ -478,9 +475,7 @@ def register():
                 if img is None:
                     flash("Invalid image format!", "danger"); return redirect(url_for("register"))
                 
-                # NAYA: DNN Detector use karein
                 faces = detect_faces_dnn(img)
-                
                 if len(faces) == 0:
                     flash("No face detected! Please try again in good lighting.", "danger")
                     return redirect(url_for("register"))
@@ -490,7 +485,6 @@ def register():
                     faces = [faces[0]]
                     
                 (x, y, w, h) = faces[0]
-                # Thora margin (padding) dene ke liye
                 pad_w, pad_h = int(w * 0.1), int(h * 0.1)
                 x1, y1 = max(0, x - pad_w), max(0, y - pad_h)
                 x2, y2 = min(img.shape[1], x + w + pad_w), min(img.shape[0], y + h + pad_h)
@@ -505,26 +499,22 @@ def register():
                 all_embeddings = [emb_original]
                 
                 # 2. AI Data Augmentation (1 photo se 4 aur copies banana taake har angle pehchane)
-                # Copy A: Brightness change (Lighting effect)
                 bright = cv2.convertScaleAbs(face_crop, alpha=1.2, beta=20)
                 all_embeddings.append(extract_embedding(bright))
                 
-                # Copy B: Darker (Low light)
                 dark = cv2.convertScaleAbs(face_crop, alpha=0.8, beta=-20)
                 all_embeddings.append(extract_embedding(dark))
                 
-                # Copy C: Horizontal Flip (Ulta chehra - side angle simulate)
                 flip = cv2.flip(face_crop, 1)
                 all_embeddings.append(extract_embedding(flip))
                 
-                # Copy D: Slight Rotation (Head tilt simulate)
                 M = cv2.getRotationMatrix2D((face_crop.shape[1]//2, face_crop.shape[0]//2), 15, 1.0)
                 rotated = cv2.warpAffine(face_crop, M, (face_crop.shape[1], face_crop.shape[0]), borderMode=cv2.BORDER_REFLECT)
                 all_embeddings.append(extract_embedding(rotated))
                 
                 all_embeddings = [e for e in all_embeddings if e is not None]
 
-                # Duplicate Check (AI se)
+                # Duplicate Check
                 conn_check = get_db()
                 try:
                     c_check = conn_check.cursor()
@@ -534,7 +524,7 @@ def register():
                     for ex_id, ex_name, ex_roll, ex_embs_json in existing_users:
                         ex_embs = json.loads(ex_embs_json)
                         for ex_emb in ex_embs:
-                            if get_cosine_distance(all_embeddings[0], ex_emb) < 0.50: # Strict Match
+                            if get_cosine_distance(all_embeddings[0], ex_emb) < 0.50: 
                                 flash(f"ERROR: This face is already registered! (Roll: {ex_roll})", "danger")
                                 return redirect(url_for("register"))
                 finally:
@@ -856,10 +846,9 @@ def update_face():
             nparr = np.frombuffer(img_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # DNN Detector
             faces = detect_faces_dnn(img)
             if len(faces) == 0:
-                flash("No human face detected! Please try again in good lighting.", "danger")
+                flash("No human face detected! Please try again.", "danger")
                 return redirect(url_for('update_face'))
                 
             if len(faces) > 1:
@@ -879,7 +868,7 @@ def update_face():
                 
             all_embeddings = [emb_original]
             
-            # Data Augmentation
+            # Data Augmentation (1 pic -> 5 embeddings)
             bright = cv2.convertScaleAbs(face_crop, alpha=1.2, beta=20); all_embeddings.append(extract_embedding(bright))
             dark = cv2.convertScaleAbs(face_crop, alpha=0.8, beta=-20); all_embeddings.append(extract_embedding(dark))
             flip = cv2.flip(face_crop, 1); all_embeddings.append(extract_embedding(flip))
@@ -910,6 +899,7 @@ def update_face():
             flash("Face data updated successfully!", "success")
             return redirect(url_for('student_portal'))
         except Exception as e:
+            print(e)
             flash("An error occurred while processing the image.", "danger")
             return redirect(url_for('update_face'))
     return render_template("student_update_face.html")
@@ -1199,6 +1189,7 @@ def video_feed():
 
 @app.route("/check_new_attendance")
 def check_new_attendance():
+    global _last_unknown_time  # <--- YEH NAYI LINE ADD HUI HAI
     if session.get('role') not in ['teacher', 'coordinator']: return {"status": "error"}
     today = date.today().strftime("%Y-%m-%d")
     conn = get_db()
@@ -1208,7 +1199,14 @@ def check_new_attendance():
                      WHERE a.teacher_id = ? AND a.date = ? AND a.subject = ? AND a.department = ? AND a.semester = ? AND a.session_name = ?
                      ORDER BY a.id DESC LIMIT 1""", (session.get('user_id'), today, session.get('target_subj'), session.get('target_dept'), session.get('target_sem'), session.get('active_session')))
         row = c.fetchone()
-        if row: return {"status": "success", "id": row[0], "name": row[1], "roll": row[2], "image": row[3], "time": row[4]}
+        
+        if row: 
+            return {"status": "success", "id": row[0], "name": row[1], "roll": row[2], "image": row[3], "time": row[4]}
+        
+        # NAYA: Agar koi unknown aaya hai toh frontend ko batayein
+        if time.time() - _last_unknown_time < 2.0:
+            return {"status": "unknown", "msg": "Unknown Person!"}
+            
     finally: conn.close()
     return {"status": "none"}
 
@@ -1221,6 +1219,8 @@ def generate_error_frame(text):
     return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
 
 def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_session):
+    global _last_unknown_time  # <--- YEH NAYI LINE ADD HUI HAI
+    
     if face_net.empty() if hasattr(face_net, 'empty') else False: 
         yield generate_error_frame("DNN Model Missing"); return
     
@@ -1241,14 +1241,13 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
     for _ in range(15): cap.read(); time.sleep(0.02)
     today, marked = date.today().strftime("%Y-%m-%d"), set()
     
-    THRESHOLD = 0.80  # Threshold
+    THRESHOLD = 0.50 
     
     try:
         while True:
             ok, frame = cap.read()
             if not ok or frame is None: yield generate_error_frame("Read Error"); break
             
-            # NAYA: DNN Detector use karein
             live_faces = detect_faces_dnn(frame)
                 
             for (x, y, w, h) in live_faces:
@@ -1284,6 +1283,10 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
                                         conn.commit()
                                         marked.add(best_match_id)
                                 finally: conn.close()
+                        else:
+                            # NAYA: Unknown face detect hone par time update karein
+                            if time.time() - _last_unknown_time > 3.0: 
+                                _last_unknown_time = time.time()
                                 
                 cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                 cv2.putText(frame, label, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
@@ -1292,7 +1295,6 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
             yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
     finally:
         if 'cap' in locals() and cap.isOpened(): cap.release()
-
 # ---------------- EXCEL DOWNLOADS ----------------
 @app.route("/download_teacher_report")
 def download_teacher_report():

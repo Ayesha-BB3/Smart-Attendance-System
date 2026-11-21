@@ -3,63 +3,127 @@
 {% block page_title %}Live Camera Attendance{% endblock %}
 
 {% block content %}
-<div class="toast-container" id="toastContainer"></div>
+<style>
+    .camera-container {
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        margin: 0 auto;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        border: 3px solid #1E3C72;
+    }
+    .camera-feed {
+        width: 100%;
+        display: block;
+    }
+    .success-card {
+        background: #10b981;
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+        display: none;
+        align-items: center;
+        gap: 15px;
+        animation: slideUp 0.3s ease-out;
+    }
+    .success-card img {
+        width: 60px; height: 60px;
+        border-radius: 50%; object-fit: cover;
+        border: 3px solid white;
+    }
+    @keyframes slideUp { from {opacity: 0; transform: translateY(20px);} to {opacity: 1; transform: translateY(0);} }
+</style>
 
-<div class="role-banner">
-    <h2>📷 Live Attendance in Progress</h2>
-    <p>Teacher: <strong>{{ teacher_name }}</strong> | Target: <strong>{{ target_dept }} - {{ target_sem }}</strong> | Subject: <strong>{{ target_subj }}</strong></p>
-</div>
-
-<div class="card text-center p-15">
-    <h3 class="card-header" style="justify-content:center;"><i class="bi bi-camera-video-fill"></i> Camera Feed</h3>
-    <div style="background:#000; border-radius:12px; padding:10px; max-width:800px; margin:0 auto;">
-        <img id="liveVideo" src="" alt="Starting camera..." style="width:100%; max-width:760px; border-radius:8px; display:block; margin:0 auto; min-height: 300px; object-fit:cover;">
+<div class="card" style="text-align: center;">
+    <h3 class="card-header" style="justify-content: center;">
+        <i class="bi bi-camera-video text-danger"></i> 
+        {{ target_dept }} - {{ target_sem }} Semester - {{ target_subj }}
+    </h3>
+    
+    <div class="camera-container">
+        <!-- Yahan Flask se camera feed aa rahi hai -->
+        <img src="{{ url_for('video_feed') }}" class="camera-feed" id="videoFeed">
     </div>
-    <div class="mt-20 flex-center gap-15 flex-wrap">
-        <a href="/teacher_attendance" onclick="stopCamera()" class="btn btn-navy"><i class="bi bi-arrow-left"></i> Stop & Back</a>
+
+    <!-- Latest Attendance Success Card -->
+    <div id="successCard" class="success-card">
+        <img id="studentImg" src="" alt="Student">
+        <div style="text-align: left;">
+            <h4 style="margin:0; color:white;" id="studentName">Name</h4>
+            <p style="margin:0; font-size: 0.9rem; opacity: 0.9;"><span id="studentRoll">Roll</span> | Marked at: <span id="markTime">Time</span></p>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('teacher_attendance') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Attendance Panel</a>
     </div>
 </div>
 
 <script>
-    let lastSeenAttendanceId = 0;
-    let isInitialLoad = true;
-    let pollInterval;
+    let lastStudentId = null;
 
-    const img = document.getElementById('liveVideo');
-    img.src = "/video_feed?t=" + new Date().getTime();
-    
-    function stopCamera() {
-        img.src = ""; clearInterval(pollInterval); document.getElementById('toastContainer').innerHTML = ""; 
-    }
+    // Har 2 second baad backend se poochta hai ke koi naya student aaya hai kya?
+    setInterval(() => {
+        fetch('/check_new_attendance')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Purana popup hata dein
+                    const existingAlert = document.getElementById('unknownAlert');
+                    if (existingAlert) existingAlert.remove();
 
-    function showToast(studentName, roll, imageName, time) {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = 'custom-toast';
-        toast.style.cssText = 'display:flex; align-items:center; gap:10px; background:var(--bg-secondary); border:1px solid var(--accent); padding:15px; border-radius:8px; margin-bottom:10px; opacity:0; transition:0.3s; transform:translateX(50px);';
-        const imageUrl = imageName ? `/student_image/${imageName}` : 'https://via.placeholder.com/60?text=No+Pic';
-        toast.innerHTML = `
-            <img src="${imageUrl}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;" alt="Student">
-            <div style="display:flex; flex-direction:column; color:white;">
-                <strong style="color:var(--accent);">✅ ${studentName}</strong>
-                <span style="font-size:0.8rem; color:var(--text-secondary);">Roll: ${roll} | Time: ${time}</span>
-            </div>
-        `;
-        container.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; }, 100);
-        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(50px)'; setTimeout(() => toast.remove(), 400); }, 3000); 
-    }
-
-    pollInterval = setInterval(() => {
-        fetch('/check_new_attendance').then(res => res.json()).then(data => {
-            if (data.status === 'success') {
-                if (isInitialLoad) { lastSeenAttendanceId = data.id; isInitialLoad = false; }
-                else if (data.id !== lastSeenAttendanceId) {
-                    lastSeenAttendanceId = data.id;
-                    showToast(data.name, data.roll, data.image, data.time);
+                    if (data.id !== lastStudentId) {
+                        lastStudentId = data.id;
+                        showSuccessCard(data);
+                    }
+                } else if (data.status === 'unknown') {
+                    // NAYA: Agar koi Unknown aaya hai
+                    showUnknownAlert();
                 }
-            } else if (data.status === 'none') { isInitialLoad = false; }
-        }).catch(err => console.log(err));
+            })
+            .catch(err => console.log("Attendance check error:", err));
     }, 2000);
+
+    function showSuccessCard(data) {
+        const card = document.getElementById('successCard');
+        document.getElementById('studentName').innerText = data.name;
+        document.getElementById('studentRoll').innerText = data.roll;
+        document.getElementById('markTime').innerText = data.time;
+        document.getElementById('studentImg').src = data.image ? `/student_image/${data.image}` : '/static/default.png';
+        
+        card.style.display = 'flex';
+
+        // 5 second baad card hide kar dein
+        setTimeout(() => {
+            card.style.display = 'none';
+        }, 5000);
+    }
+
+    // NAYA FUNCTION: Unknown warning popup
+    function showUnknownAlert() {
+        // Agar pehle se popup screen par hai, toh naya na banayein
+        if (document.getElementById('unknownAlert')) return;
+
+        const alertDiv = document.createElement('div');
+        alertDiv.id = 'unknownAlert';
+        alertDiv.style.cssText = `
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background-color: #ef4444; color: white; padding: 15px 30px;
+            border-radius: 8px; font-weight: bold; font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999;
+            display: flex; align-items: center; gap: 10px;
+        `;
+        alertDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> Warning: Unknown Person Detected!`;
+        
+        document.body.appendChild(alertDiv);
+
+        // 3 second baad laal popup automatically ghayab ho jaye
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 3000);
+    }
 </script>
 {% endblock %}

@@ -83,11 +83,14 @@
                 <input type="password" name="password" placeholder="Enter a strong password" required minlength="6">
             </div>
 
+            <!-- SINGLE CAMERA SECTION -->
             <div id="cameraSection" style="background: var(--bg-main); border: 1px dashed var(--border); border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 20px;">
                 <label style="font-weight: 600; margin-bottom: 10px; display: block; color: var(--text-dark);"><i class="bi bi-camera-video-fill" style="color: var(--primary);"></i> Face Capture (Students Only)</label>
-                <video id="video" autoplay playsinline style="width: 100%; border-radius: 8px; margin-bottom: 10px; background: #000;"></video>
+                
+                <video id="video" autoplay playsinline style="width: 100%; border-radius: 8px; margin-bottom: 10px; background: #000; transform: scaleX(-1);"></video>
                 <canvas id="canvas" style="display:none;"></canvas>
-                <img id="preview" style="width: 100%; border-radius: 8px; margin-bottom: 10px; display: none;">
+                <img id="preview" style="width: 100%; border-radius: 8px; margin-bottom: 10px; display: none; transform: scaleX(-1);">
+                
                 <div class="flex-center gap-10">
                     <button type="button" id="captureBtn" class="btn btn-primary"><i class="bi bi-camera"></i> Capture</button>
                     <button type="button" id="retakeBtn" class="btn btn-light" style="display: none;"><i class="bi bi-arrow-clockwise"></i> Retake</button>
@@ -95,7 +98,7 @@
                 <input type="hidden" name="image_data" id="imageData">
             </div>
 
-            <button type="submit" class="btn btn-primary w-100" style="padding: 14px; font-size: 1rem;"><i class="bi bi-person-plus-fill"></i> Register Account</button>
+            <button type="submit" id="submitBtn" class="btn btn-primary w-100" style="padding: 14px; font-size: 1rem;"><i class="bi bi-person-plus-fill"></i> Register Account</button>
         </form>
 
         <div class="text-center mt-20">
@@ -120,7 +123,7 @@
         async function startCamera() {
             if (videoStream) return; 
             try { 
-                                videoStream = await navigator.mediaDevices.getUserMedia({ 
+                videoStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } 
                 }); 
                 video.srcObject = videoStream; 
@@ -164,8 +167,15 @@
         
         captureBtn.addEventListener('click', () => {
             const ctx = canvas.getContext('2d'); 
-            canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480; 
+            canvas.width = video.videoWidth || 640; 
+            canvas.height = video.videoHeight || 480; 
+            
+            // Canvas par drawing (mirror effect ke sath)
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+
             imageData.value = canvas.toDataURL('image/jpeg', 0.9); 
             preview.src = imageData.value; preview.style.display = 'block'; 
             video.style.display = 'none'; captureBtn.style.display = 'none'; retakeBtn.style.display = 'inline-flex';

@@ -92,75 +92,119 @@ def detect_faces_dnn(image):
 ALL_SEMESTERS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"]
 ALL_DEPARTMENTS = ["Computer Science", "English", "Urdu", "Physics", "Economics", "Mathematics", "Chemistry", "Biology", "Business Administration"]
 
-# ================= NAYA: PYTORCH MODEL LOADER (ResNet50) =================
+
+# ============== TRAINED RESNET18 + ARCFACE ENCODER ==============
+
 _face_model = None
-IMG_SIZE = 160 
+IMG_SIZE = 112
+EMBEDDING_SIZE = 128
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# New Model Architecture (ResNet50)
+
 class FaceModel(nn.Module):
-    def __init__(self, emb_size=512):
-        super(FaceModel, self).__init__()
-        self.backbone = models.resnet50(weights=None)
-        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, emb_size)
+    def __init__(self):
+        super().__init__()
+
+        net = models.resnet18(weights=None)
+        net.fc = nn.Identity()
+
+        self.backbone = net
+        self.fc = nn.Linear(512, 128, bias=False)
 
     def forward(self, x):
-        return self.backbone(x)
+        return self.fc(self.backbone(x))
+
 
 def get_face_model():
     global _face_model
+
     if _face_model is None:
-        model_path = os.path.join(MODELS_FOLDER, 'face_recognition_model1.pth')
-        
+        model_path = os.path.join(
+            MODELS_FOLDER,
+            "face_encoder.pth"
+        )
+
         if not os.path.exists(model_path):
-            print(f"❌ ERROR: Model file nahi mili! Ise yahan rakhein: {model_path}")
+            print("ERROR: Trained face_encoder.pth not found:", model_path)
             return None
-            
+
+        checkpoint = torch.load(
+            model_path,
+            map_location=device,
+            weights_only=True
+        )
+
         _face_model = FaceModel().to(device)
-        _face_model.load_state_dict(torch.load(model_path, map_location=device))
+
+        _face_model.load_state_dict(checkpoint["encoder"])
         _face_model.eval()
-        
+
+        print("Face encoder loaded successfully!")
+        print("Embedding size:", EMBEDDING_SIZE)
+        print("Training pair accuracy:", checkpoint["pair_acc"])
+
     return _face_model
 
-# Transform (160x160)
+
+# Training wali same preprocessing
 val_tf = T.Compose([
-    T.Resize((IMG_SIZE, IMG_SIZE)),
+    T.Resize((112, 112)),
     T.ToTensor(),
-    T.Normalize([0.5]*3, [0.5]*3),
+    T.Normalize([0.5, 0.5, 0.5],
+                [0.5, 0.5, 0.5])
 ])
+
 
 def extract_embedding(img_bgr):
     try:
         model = get_face_model()
+
         if model is None:
             return None
-            
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+        img_rgb = cv2.cvtColor(
+            img_bgr,
+            cv2.COLOR_BGR2RGB
+        )
+
         img_pil = Image.fromarray(img_rgb)
-        
+
         tensor = val_tf(img_pil).unsqueeze(0).to(device)
-        
+
         with torch.no_grad():
-            embedding = model(tensor).cpu().numpy()[0]
-            
-        return embedding.tolist()
+            embedding = model(tensor)
+            embedding = F.normalize(embedding, p=2, dim=1)
+
+        return embedding.cpu().numpy()[0].tolist()
+
     except Exception as e:
-        print(f"Embedding Error: {e}")
+        print("Embedding Error:", e)
         return None
 
+
 def get_cosine_distance(e1, e2):
+
     e1 = np.asarray(e1, dtype=np.float32).flatten()
     e2 = np.asarray(e2, dtype=np.float32).flatten()
 
-    if e1.shape != e2.shape:
-        return 1.0 
+    if e1.shape != (128,) or e2.shape != (128,):
+        return 1.0
 
     n1 = np.linalg.norm(e1)
     n2 = np.linalg.norm(e2)
+
     if n1 == 0 or n2 == 0:
         return 1.0
 
-    return 1.0 - float(np.dot(e1 / n1, e2 / n2))
+    similarity = float(
+        np.dot(e1 / n1, e2 / n2)
+    )
+
+    return 1.0 - similarity
+
+# ==============================================================
+
 # ==================================================
 
 def get_db():
@@ -583,7 +627,7 @@ def register():
                             ex_embs = json.loads(ex_embs_json)
                             for ex_emb in ex_embs:
                                 arr = np.asarray(ex_emb, dtype=np.float32).flatten()
-                                if arr.shape[0] != 512: # 512 Check for ArcFace
+                                if arr.shape[0] != 128: # 128 Check for ArcFace
                                     continue 
                                 if get_cosine_distance(all_embeddings[0], ex_emb) < 0.25: 
                                     flash(f"ERROR: This face is already registered! (Roll: {ex_roll})", "danger")
@@ -1294,8 +1338,11 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
         for uid, uname, uroll, embs_json in c.fetchall():
             try:
                 embs = json.loads(embs_json)
-                # ArcFace 512-D embeddings
-                valid_embs = [e for e in embs if len(np.asarray(e).flatten()) == 512]
+                # ArcFace 128-D embeddings
+                valid_embs = [
+    e for e in embs
+    if len(np.asarray(e).flatten()) == 128
+]
                 if valid_embs:
                     known_students.append({"id": uid, "name": uname, "roll": uroll, "embeddings": valid_embs})
                 else:
@@ -1312,7 +1359,7 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
     today, marked = date.today().strftime("%Y-%m-%d"), set()
     
     # ⚡ ArcFace THRESHOLD: 0.30 (Agar pehchaanne me masla ho to 0.35 karein)
-    THRESHOLD = 0.30 
+    THRESHOLD = 0.74 
     
     try:
         while True:

@@ -6,7 +6,6 @@ import uuid
 import base64
 import time
 import json
-import tensorflow as tf
 from io import BytesIO
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, session, send_from_directory
@@ -16,8 +15,14 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import secrets
 
-# TensorFlow ki warnings chupane ke liye
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+# ================= PYTORCH IMPORTS =================
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision.transforms as T
+import torchvision.models as models
+from PIL import Image
+# ===================================================
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
@@ -34,73 +39,128 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     return response
 
+# ================= GLOBAL UNKNOWN TRACKER =================
+_last_unknown_time = {}
+# ==========================================================
+
 INSTANCE_FOLDER = os.path.join(app.root_path, 'instance')
 FACE_FOLDER = os.path.join(INSTANCE_FOLDER, 'student_faces')
 LEAVE_DOC_FOLDER = os.path.join(INSTANCE_FOLDER, 'leave_documents')
+MODELS_FOLDER = os.path.join(app.root_path, 'models')
 os.makedirs(FACE_FOLDER, exist_ok=True)
 os.makedirs(LEAVE_DOC_FOLDER, exist_ok=True)
+os.makedirs(MODELS_FOLDER, exist_ok=True) 
 
 DB_NAME = "attendance.db"
 CASCADE_PATH = os.path.join(app.root_path, 'static', 'haarcascade_frontalface_default.xml')
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
-# ================= NAYA: DEEP LEARNING FACE DETECTOR =================
+# ================= DEEP LEARNING FACE DETECTOR =================
 PROTOTXT_PATH = os.path.join(app.root_path, 'static', 'deploy.prototxt')
 MODEL_PATH = os.path.join(app.root_path, 'static', 'res10_300x300_ssd_iter_140000.caffemodel')
-face_net = cv2.dnn.readNetFromCaffe(PROTOTXT_PATH, MODEL_PATH)
+if os.path.exists(PROTOTXT_PATH) and os.path.exists(MODEL_PATH):
+    face_net = cv2.dnn.readNetFromCaffe(PROTOTXT_PATH, MODEL_PATH)
+else:
+    print("⚠️ WARNING: DNN Face Detector files nahi milin. Haar Cascade use hoga.")
+    face_net = None
 
 def detect_faces_dnn(image):
-    (h, w) = image.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-    face_net.setInput(blob)
-    detections = face_net.forward()
-    
-    faces = []
-    for i in range(0, detections.shape[2]):
-        confidence = detections[0, 0, i, 2]
-        if confidence > 0.5:
-            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-            (startX, startY, endX, endY) = box.astype("int")
-            startX, startY = max(0, startX), max(0, startY)
-            endX, endY = min(w - 1, endX), min(h - 1, endY)
-            fw, fh = endX - startX, endY - startY
-            if fw > 0 and fh > 0:
-                faces.append((startX, startY, fw, fh))
-    return faces
+    if face_net is not None:
+        (h, w) = image.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(image, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
+        face_net.setInput(blob)
+        detections = face_net.forward()
+        
+        faces = []
+        for i in range(0, detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5:
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
+                startX, startY = max(0, startX), max(0, startY)
+                endX, endY = min(w - 1, endX), min(h - 1, endY)
+                fw, fh = endX - startX, endY - startY
+                if fw > 0 and fh > 0:
+                    faces.append((startX, startY, fw, fh))
+        return faces
+    else:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4, minSize=(30, 30))
+        return faces
 # ======================================================================
 
 ALL_SEMESTERS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"]
 ALL_DEPARTMENTS = ["Computer Science", "English", "Urdu", "Physics", "Economics", "Mathematics", "Chemistry", "Biology", "Business Administration"]
 
-# ================= AI MODEL LOADER =================
+# ================= NAYA: PYTORCH MODEL LOADER (ResNet50) =================
 _face_model = None
-IMG_SIZE = 160 # NAYA MODEL 160x160 PAR TRAIN HUA HAI
-_last_unknown_time = 0
+IMG_SIZE = 160 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# New Model Architecture (ResNet50)
+class FaceModel(nn.Module):
+    def __init__(self, emb_size=512):
+        super(FaceModel, self).__init__()
+        self.backbone = models.resnet50(weights=None)
+        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, emb_size)
+
+    def forward(self, x):
+        return self.backbone(x)
 
 def get_face_model():
     global _face_model
     if _face_model is None:
-        _face_model = tf.keras.models.load_model('models/face_embedder.h5')
+        model_path = os.path.join(MODELS_FOLDER, 'face_recognition_model1.pth')
+        
+        if not os.path.exists(model_path):
+            print(f"❌ ERROR: Model file nahi mili! Ise yahan rakhein: {model_path}")
+            return None
+            
+        _face_model = FaceModel().to(device)
+        _face_model.load_state_dict(torch.load(model_path, map_location=device))
+        _face_model.eval()
+        
     return _face_model
+
+# Transform (160x160)
+val_tf = T.Compose([
+    T.Resize((IMG_SIZE, IMG_SIZE)),
+    T.ToTensor(),
+    T.Normalize([0.5]*3, [0.5]*3),
+])
 
 def extract_embedding(img_bgr):
     try:
         model = get_face_model()
+        if model is None:
+            return None
+            
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (IMG_SIZE, IMG_SIZE))
+        img_pil = Image.fromarray(img_rgb)
         
-        # Training ke mutabiq (bina YUV ke)
-        img_array = img_resized.astype(np.float32) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
-        embedding = model.predict(img_array, verbose=0)[0]
+        tensor = val_tf(img_pil).unsqueeze(0).to(device)
+        
+        with torch.no_grad():
+            embedding = model(tensor).cpu().numpy()[0]
+            
         return embedding.tolist()
     except Exception as e:
         print(f"Embedding Error: {e}")
         return None
 
 def get_cosine_distance(e1, e2):
-    e1, e2 = np.array(e1), np.array(e2)
-    return 1.0 - np.dot(e1, e2)
+    e1 = np.asarray(e1, dtype=np.float32).flatten()
+    e2 = np.asarray(e2, dtype=np.float32).flatten()
+
+    if e1.shape != e2.shape:
+        return 1.0 
+
+    n1 = np.linalg.norm(e1)
+    n2 = np.linalg.norm(e2)
+    if n1 == 0 or n2 == 0:
+        return 1.0
+
+    return 1.0 - float(np.dot(e1 / n1, e2 / n2))
 # ==================================================
 
 def get_db():
@@ -367,7 +427,7 @@ def login(role):
         if user and check_password_hash(user[2], pwd):
             actual_role = user[3]
             approval    = user[4]
-            is_coord    = user[5]
+            is_coord    = user[5] if len(user) > 5 else 0
             
             can_login = False
             if role == 'student' and actual_role == 'student': can_login = True
@@ -419,7 +479,6 @@ def register():
         department = request.form.get("department")
         semester = request.form.get("semester")
         
-        # 1 SINGLE PHOTO ACCEPT KAR RAHE HAIN
         image_data = request.form.get("image_data") 
         admin_code = request.form.get("admin_code", "").strip()
 
@@ -491,14 +550,12 @@ def register():
                 
                 face_crop = img[y1:y2, x1:x2]
                 
-                # 1. Original Photo ka embedding
                 emb_original = extract_embedding(face_crop)
                 if not emb_original:
                     flash("Failed to read face features. Try again.", "danger"); return redirect(url_for("register"))
                 
                 all_embeddings = [emb_original]
                 
-                # 2. AI Data Augmentation (1 photo se 4 aur copies banana taake har angle pehchane)
                 bright = cv2.convertScaleAbs(face_crop, alpha=1.2, beta=20)
                 all_embeddings.append(extract_embedding(bright))
                 
@@ -514,7 +571,7 @@ def register():
                 
                 all_embeddings = [e for e in all_embeddings if e is not None]
 
-                # Duplicate Check
+                # SAFE Duplicate Check (Threshold 0.25 for ArcFace)
                 conn_check = get_db()
                 try:
                     c_check = conn_check.cursor()
@@ -522,11 +579,18 @@ def register():
                     existing_users = c_check.fetchall()
                     
                     for ex_id, ex_name, ex_roll, ex_embs_json in existing_users:
-                        ex_embs = json.loads(ex_embs_json)
-                        for ex_emb in ex_embs:
-                            if get_cosine_distance(all_embeddings[0], ex_emb) < 0.50: 
-                                flash(f"ERROR: This face is already registered! (Roll: {ex_roll})", "danger")
-                                return redirect(url_for("register"))
+                        try:
+                            ex_embs = json.loads(ex_embs_json)
+                            for ex_emb in ex_embs:
+                                arr = np.asarray(ex_emb, dtype=np.float32).flatten()
+                                if arr.shape[0] != 512: # 512 Check for ArcFace
+                                    continue 
+                                if get_cosine_distance(all_embeddings[0], ex_emb) < 0.25: 
+                                    flash(f"ERROR: This face is already registered! (Roll: {ex_roll})", "danger")
+                                    return redirect(url_for("register"))
+                        except Exception as ex:
+                            print(f"[WARN] Duplicate check failed for {ex_roll}: {ex}")
+                            continue
                 finally:
                     conn_check.close()
                     
@@ -868,7 +932,6 @@ def update_face():
                 
             all_embeddings = [emb_original]
             
-            # Data Augmentation (1 pic -> 5 embeddings)
             bright = cv2.convertScaleAbs(face_crop, alpha=1.2, beta=20); all_embeddings.append(extract_embedding(bright))
             dark = cv2.convertScaleAbs(face_crop, alpha=0.8, beta=-20); all_embeddings.append(extract_embedding(dark))
             flip = cv2.flip(face_crop, 1); all_embeddings.append(extract_embedding(flip))
@@ -1189,25 +1252,24 @@ def video_feed():
 
 @app.route("/check_new_attendance")
 def check_new_attendance():
-    global _last_unknown_time  # <--- YEH NAYI LINE ADD HUI HAI
     if session.get('role') not in ['teacher', 'coordinator']: return {"status": "error"}
+    teacher_id = session.get('user_id')
     today = date.today().strftime("%Y-%m-%d")
     conn = get_db()
     try:
         c = conn.cursor()
         c.execute("""SELECT a.id, u.name, u.roll_number, u.face_image, a.time FROM attendance a JOIN users u ON a.user_id = u.id 
                      WHERE a.teacher_id = ? AND a.date = ? AND a.subject = ? AND a.department = ? AND a.semester = ? AND a.session_name = ?
-                     ORDER BY a.id DESC LIMIT 1""", (session.get('user_id'), today, session.get('target_subj'), session.get('target_dept'), session.get('target_sem'), session.get('active_session')))
+                     ORDER BY a.id DESC LIMIT 1""", (teacher_id, today, session.get('target_subj'), session.get('target_dept'), session.get('target_sem'), session.get('active_session')))
         row = c.fetchone()
-        
-        if row: 
-            return {"status": "success", "id": row[0], "name": row[1], "roll": row[2], "image": row[3], "time": row[4]}
-        
-        # NAYA: Agar koi unknown aaya hai toh frontend ko batayein
-        if time.time() - _last_unknown_time < 2.0:
-            return {"status": "unknown", "msg": "Unknown Person!"}
-            
+        if row: return {"status": "success", "id": row[0], "name": row[1], "roll": row[2], "image": row[3], "time": row[4]}
     finally: conn.close()
+
+    # UNKNOWN TRACKER
+    last_unknown = _last_unknown_time.get(teacher_id, 0)
+    if last_unknown and (time.time() - last_unknown) < 5:
+        return {"status": "unknown"}
+
     return {"status": "none"}
 
 def generate_error_frame(text):
@@ -1219,19 +1281,27 @@ def generate_error_frame(text):
     return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
 
 def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_session):
-    global _last_unknown_time  # <--- YEH NAYI LINE ADD HUI HAI
-    
-    if face_net.empty() if hasattr(face_net, 'empty') else False: 
-        yield generate_error_frame("DNN Model Missing"); return
-    
     model = get_face_model()
+    if model is None:
+        yield generate_error_frame("Model Missing")
+        return
+        
     conn = get_db()
     known_students = []
     try:
         c = conn.cursor()
         c.execute("SELECT id, name, roll_number, face_embeddings FROM users WHERE role='student' AND department=? AND semester=? AND face_embeddings IS NOT NULL", (target_dept, target_sem))
         for uid, uname, uroll, embs_json in c.fetchall():
-            known_students.append({"id": uid, "name": uname, "roll": uroll, "embeddings": json.loads(embs_json)})
+            try:
+                embs = json.loads(embs_json)
+                # ArcFace 512-D embeddings
+                valid_embs = [e for e in embs if len(np.asarray(e).flatten()) == 512]
+                if valid_embs:
+                    known_students.append({"id": uid, "name": uname, "roll": uroll, "embeddings": valid_embs})
+                else:
+                    print(f"[WARN] Skipped {uroll} - Purani embeddings hain.")
+            except Exception as e:
+                print(f"[WARN] Error loading embeddings for {uroll}: {e}")
     finally: conn.close()
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
@@ -1241,7 +1311,8 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
     for _ in range(15): cap.read(); time.sleep(0.02)
     today, marked = date.today().strftime("%Y-%m-%d"), set()
     
-    THRESHOLD = 0.50 
+    # ⚡ ArcFace THRESHOLD: 0.30 (Agar pehchaanne me masla ho to 0.35 karein)
+    THRESHOLD = 0.30 
     
     try:
         while True:
@@ -1257,6 +1328,7 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
                 
                 face_crop = frame[y1:y2, x1:x2]
                 color, label = (0, 0, 255), "Unknown"
+                matched = False
                 
                 if len(known_students) > 0:
                     live_emb = extract_embedding(face_crop)
@@ -1265,13 +1337,22 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
                         min_dist = 999.0
                         
                         for student in known_students:
+                            student_dists = []
                             for stored_emb in student["embeddings"]:
-                                dist = get_cosine_distance(live_emb, stored_emb)
-                                if dist < min_dist:
-                                    min_dist = dist
+                                try:
+                                    dist = get_cosine_distance(live_emb, stored_emb)
+                                    student_dists.append(dist)
+                                except Exception as ex:
+                                    continue
+                            
+                            if student_dists:
+                                avg_dist = sum(student_dists) / len(student_dists)
+                                if avg_dist < min_dist:
+                                    min_dist = avg_dist
                                     best_match_id, best_match_name, best_match_roll = student["id"], student["name"], student["roll"]
                                     
                         if min_dist < THRESHOLD:
+                            matched = True
                             label, color = f"{best_match_name} ({best_match_roll})", (0, 255, 0)
                             if best_match_id not in marked:
                                 conn = get_db()
@@ -1283,10 +1364,10 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
                                         conn.commit()
                                         marked.add(best_match_id)
                                 finally: conn.close()
-                        else:
-                            # NAYA: Unknown face detect hone par time update karein
-                            if time.time() - _last_unknown_time > 3.0: 
-                                _last_unknown_time = time.time()
+                
+                # Unknown Tracker
+                if not matched:
+                    _last_unknown_time[teacher_id] = time.time()
                                 
                 cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                 cv2.putText(frame, label, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
@@ -1295,6 +1376,7 @@ def generate_frames(target_dept, target_sem, subject_name, teacher_id, active_se
             yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
     finally:
         if 'cap' in locals() and cap.isOpened(): cap.release()
+        
 # ---------------- EXCEL DOWNLOADS ----------------
 @app.route("/download_teacher_report")
 def download_teacher_report():
